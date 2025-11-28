@@ -12,6 +12,8 @@
             "prioridad-posicion-terrestre": [
                 "hoplita",
                 "gigante-vapor",
+                "agitador-hachas-barbaro",
+                "unidad-guerra-barbara",
                 "espadachin",
                 "lancero",
                 "fusilero",
@@ -21,6 +23,8 @@
             "prioridad-posicion-maritima": [
                 "barco-lanzallamas",
                 "barco-espolon-vapor",
+                "pirobarco",
+                "cuña",
                 "barco-espolon-comun"
             ]
         },
@@ -35,11 +39,15 @@
             "prioridad-posicion-terrestre": [
                 "fusilero",
                 "arquero",
+                "lanzahachas-barbaro",
                 "hondero"
             ],
             "prioridad-posicion-maritima": [
                 "barco-mortero",
                 "barco-catapulta",
+                "rajavelas",
+                "tiraguijarros",
+                "catapulta-polvora",
                 "barco-ballesta"
             ]
         },
@@ -54,9 +62,12 @@
             ],
             "prioridad-posicion-terrestre": [
                 "espadachin",
+                "aporreador-barbaro",
+                "clava-cuchillos-barbaro",
                 "lancero"
             ],
             "prioridad-posicion-maritima": [
+                "rompelanchas",
                 "barco-espolon-comun"
             ]
         },
@@ -70,10 +81,14 @@
             "prioridad-posicion-terrestre": [
                 "mortero",
                 "catapulta",
+                "catapulta-barbara",
+                "ariete-barbaro",
                 "ariete"
             ],
             "prioridad-posicion-maritima": [
                 "barco-lanzamisiles",
+                "fuego-dragon",
+                "terror-profundidades-marinas",
                 "submarino"
             ]
         },
@@ -87,10 +102,12 @@
                 "flancos"
             ],
             "prioridad-posicion-terrestre": [
-                "bombardero"
+                "bombardero",
+                "dirigible-barbaro"
             ],
             "prioridad-posicion-maritima": [
-                "barco-portaglobos"
+                "barco-portaglobos",
+                "Nido-barbaros"
             ]
         },
         {
@@ -101,10 +118,12 @@
                 "anti-aerea"
             ],
             "prioridad-posicion-terrestre": [
-                "girocoptero"
+                "girocoptero",
+                "caza-barbaro"
             ],
             "prioridad-posicion-maritima": [
-                "lancha-palas"
+                "lancha-palas",
+                "encendedor-zepelin"
             ]
         }
     ]
