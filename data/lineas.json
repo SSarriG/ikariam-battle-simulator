@@ -12,20 +12,20 @@
             "prioridad-posicion-terrestre": [
                 "hoplita",
                 "gigante-vapor",
-                "agitador-hachas-barbaro",
-                "unidad-guerra-barbara",
                 "espadachin",
                 "lancero",
-                "fusilero",
-                "arquero",
-                "hondero"
+                "agitador-hachas-barbaro",
+                "unidad-guerra-barbara",
+                "clava-cuchillos-barbaro",
+                "aporreador-barbaro"
             ],
             "prioridad-posicion-maritima": [
                 "barco-lanzallamas",
                 "barco-espolon-vapor",
+                "barco-espolon-comun",
                 "pirobarco",
                 "cuña",
-                "barco-espolon-comun"
+                "rompelanchas"
             ]
         },
         {
@@ -39,16 +39,16 @@
             "prioridad-posicion-terrestre": [
                 "fusilero",
                 "arquero",
-                "lanzahachas-barbaro",
-                "hondero"
+                "hondero",
+                "lanzahachas-barbaro"
             ],
             "prioridad-posicion-maritima": [
                 "barco-mortero",
                 "barco-catapulta",
-                "rajavelas",
-                "tiraguijarros",
+                "barco-ballesta",
                 "catapulta-polvora",
-                "barco-ballesta"
+                "tiraguijarros",
+                "rajavelas"
             ]
         },
         {
@@ -62,13 +62,13 @@
             ],
             "prioridad-posicion-terrestre": [
                 "espadachin",
-                "aporreador-barbaro",
+                "lancero",
                 "clava-cuchillos-barbaro",
-                "lancero"
+                "aporreador-barbaro"
             ],
             "prioridad-posicion-maritima": [
-                "rompelanchas",
-                "barco-espolon-comun"
+                "barco-espolon-comun",
+                "rompelanchas"
             ]
         },
         {
@@ -81,15 +81,15 @@
             "prioridad-posicion-terrestre": [
                 "mortero",
                 "catapulta",
+                "ariete",
                 "catapulta-barbara",
-                "ariete-barbaro",
-                "ariete"
+                "ariete-barbaro"
             ],
             "prioridad-posicion-maritima": [
                 "barco-lanzamisiles",
+                "submarino",
                 "fuego-dragon",
-                "terror-profundidades-marinas",
-                "submarino"
+                "terror-profundidades-marinas"
             ]
         },
         {
