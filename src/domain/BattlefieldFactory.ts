@@ -95,24 +95,31 @@ export class BattlefieldFactory {
     }
 
     private static distributeSide(lines: Map<UnitType, BattleLine>, units: Unit[]): void {
-        // Group units by their target line type
-        const unitsByLine = new Map<UnitType, Unit[]>();
+        // Phase 1: Fill slots with shared pool
+        // We iterate through lines in the order they were created (which matches lineas.json order)
+        // This ensures Front Line is filled first, then Ranged, etc.
+        let availableUnits = [...units];
 
-        units.forEach(unit => {
-            // Map unit type to line type (usually same, but good to be explicit)
-            // In our enum they are the same
-            const lineType = unit.type;
-            if (!unitsByLine.has(lineType)) {
-                unitsByLine.set(lineType, []);
-            }
-            unitsByLine.get(lineType)?.push(unit);
+        lines.forEach((line) => {
+            // Try to fill slots with ANY available unit that matches the line's priorities
+            // Pass false to handleReserves so we get back unused units
+            availableUnits = SlotFillingAlgorithm.fill(line, availableUnits, false);
         });
 
-        // Distribute for each line
-        lines.forEach((line, lineType) => {
-            const lineUnits = unitsByLine.get(lineType) || [];
-            SlotFillingAlgorithm.fill(line, lineUnits);
-        });
+        // Phase 2: Distribute remaining units to native reserves
+        if (availableUnits.length > 0) {
+            console.log(`[BattlefieldFactory] Distributing ${availableUnits.length} remaining units to reserves.`);
+            availableUnits.forEach(unit => {
+                const lineType = unit.type;
+                const line = lines.get(lineType);
+                if (line) {
+                    unit.sendToReserve();
+                    line.reserves.push(unit);
+                } else {
+                    console.warn(`[BattlefieldFactory] Unit ${unit.name} has unknown type ${lineType}. Cannot add to reserves.`);
+                }
+            });
+        }
     }
 
     private static addWalls(battlefield: Battlefield, wallLevel: number): void {

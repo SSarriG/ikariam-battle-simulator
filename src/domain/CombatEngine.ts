@@ -18,6 +18,7 @@ import { Unit } from './Unit';
 import { FieldSizeService } from './FieldSizeService';
 import { BattlefieldConfiguration } from './BattlefieldConfiguration';
 import { BattleSlot } from './BattleSlot';
+import { BattleLine } from './BattleLine';
 
 export class CombatEngine {
     private battlefield: Battlefield;
@@ -114,13 +115,9 @@ export class CombatEngine {
         // 1. Refill slots from reserves (new units enter the battle)
         this.refillSlotsFromReserves();
 
-        // 2. Redistribute units between slots (fill priority slots with healthy units)
-        this.battlefield.attackerLines.forEach(line => SlotRefillService.redistributeSlots(line));
-        this.battlefield.defenderLines.forEach(line => SlotRefillService.redistributeSlots(line));
-
-        // 3. Apply Reserve-Redistribution (RR)
-        // DISABLED: To ensure casualties occur round-by-round (1:1 damage model)
-        // this.applyReserveRedistribution();
+        // 2. Redistribute active units across all lines (priority-based)
+        // This ensures priority lines are filled first
+        this.redistributeActiveUnits();
 
         const attackOrder = AttackSequencer.getAttackOrder();
 
@@ -208,23 +205,106 @@ export class CombatEngine {
     }
 
     private refillSlotsFromReserves(): void {
-        console.log('[CombatEngine] Refilling slots from reserves...');
-        const refillLine = (line: any) => {
+        console.log('[CombatEngine] Refilling slots from reserves (Shared Pool)...');
+        this.refillSide(this.battlefield.attackerLines);
+        this.refillSide(this.battlefield.defenderLines);
+    }
+
+    private refillSide(lines: Map<UnitType, BattleLine>): void {
+        // 1. Collect ALL reserves from ALL lines into a single pool
+        let allReserves: any[] = [];
+        lines.forEach(line => {
             if (line.reserves.length > 0) {
-                console.log(`[CombatEngine] Line ${line.lineType} has ${line.reserves.length} reserves. Attempting to fill slots.`);
-                // Take all reserves
-                const availableReserves = [...line.reserves];
-                // Clear reserves temporarily
-                line.reserves = [];
-
-                // Try to fill slots with reserves
-                // Note: SlotFillingAlgorithm.fill will put back any unused units into reserves
-                SlotFillingAlgorithm.fill(line, availableReserves);
+                allReserves.push(...line.reserves);
+                line.reserves = []; // Clear reserves
             }
-        };
+        });
 
-        this.battlefield.attackerLines.forEach(refillLine);
-        this.battlefield.defenderLines.forEach(refillLine);
+        if (allReserves.length === 0) return;
+
+        console.log(`[CombatEngine] Total reserves available: ${allReserves.length}`);
+
+        // 2. Fill slots line by line using the shared pool
+        // Iteration order of Map matches insertion order (lineas.json order), which is correct priority
+        lines.forEach(line => {
+            // Try to fill slots with ANY available reserve unit
+            // Pass false to handleReserves so we get back unused units
+            allReserves = SlotFillingAlgorithm.fill(line, allReserves, false);
+        });
+
+        // 3. Distribute remaining units back to their native reserves
+        if (allReserves.length > 0) {
+            console.log(`[CombatEngine] Returning ${allReserves.length} unused units to native reserves.`);
+            allReserves.forEach(unit => {
+                const lineType = unit.type;
+                const line = lines.get(lineType);
+                if (line) {
+                    line.reserves.push(unit);
+                } else {
+                    console.warn(`[CombatEngine] Unit ${unit.name} has unknown type ${lineType}. Cannot return to reserve.`);
+                }
+            });
+        }
+    }
+
+    private redistributeActiveUnits(): void {
+        console.log('[CombatEngine] Redistributing active units across all lines...');
+        this.redistributeActiveSide(this.battlefield.attackerLines);
+        this.redistributeActiveSide(this.battlefield.defenderLines);
+    }
+
+    private redistributeActiveSide(lines: Map<UnitType, BattleLine>): void {
+        // 1. Collect ALL active units from ALL slots (EXCEPT WallUnits)
+        const allActiveUnits: Unit[] = [];
+
+        lines.forEach(line => {
+            line.slots.forEach(slot => {
+                // Get all units from this slot
+                const units = slot.units;
+                // Filter out WallUnits - they should stay in their slots
+                const nonWallUnits = units.filter(u => u.name !== 'Muro' && !u.name.startsWith('wall-'));
+                allActiveUnits.push(...nonWallUnits);
+            });
+        });
+
+        if (allActiveUnits.length === 0) return;
+
+        console.log(`[CombatEngine] Collected ${allActiveUnits.length} active units for redistribution (excluding walls)`);
+
+        // 2. Clear all slots BUT preserve WallUnits
+        lines.forEach(line => {
+            line.slots.forEach(slot => {
+                const units = slot.units;
+                // Keep only WallUnits
+                const wallUnits = units.filter(u => u.name === 'Muro' || u.name.startsWith('wall-'));
+                slot.replaceUnits(wallUnits);
+            });
+        });
+
+        // 3. Redistribute units using priority-based filling
+        // SlotFillingAlgorithm already checks for walls and skips those slots
+        let remainingUnits = allActiveUnits;
+
+        lines.forEach(line => {
+            // Use SlotFillingAlgorithm to fill this line's slots
+            remainingUnits = SlotFillingAlgorithm.fill(line, remainingUnits, false);
+        });
+
+        // 4. Any remaining units go to their native line reserves
+        // (This should rarely happen, but just in case)
+        if (remainingUnits.length > 0) {
+            console.warn(`[CombatEngine] ${remainingUnits.length} active units could not be placed. Sending to reserves.`);
+            remainingUnits.forEach(unit => {
+                const lineType = unit.type;
+                const line = lines.get(lineType);
+                if (line) {
+                    unit.sendToReserve();
+                    line.reserves.push(unit);
+                } else {
+                    console.error(`[CombatEngine] Cannot find line for unit ${unit.name} of type ${lineType}`);
+                }
+            });
+        }
     }
 
     private processLineAttacks(attackerSide: 'attacker' | 'defender', lineType: UnitType, enemySide: 'attacker' | 'defender'): void {

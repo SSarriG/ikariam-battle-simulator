@@ -2,7 +2,7 @@ import { BattleLine } from './BattleLine';
 import { Unit } from './Unit';
 
 export class SlotFillingAlgorithm {
-    static fill(line: BattleLine, availableUnits: Unit[]): void {
+    static fill(line: BattleLine, availableUnits: Unit[], handleReserves: boolean = true): Unit[] {
         console.log(`[SlotFillingAlgorithm] Filling line ${line.lineType} with ${availableUnits.length} units. Reserves: ${line.reserves.length}`);
 
         // Group units by name for easier access
@@ -63,13 +63,23 @@ export class SlotFillingAlgorithm {
             }
         });
 
-        // Add remaining units to reserves
-        unitsMap.forEach((units, name) => {
-            if (units.length > 0) {
-                console.log(`[SlotFillingAlgorithm] ${units.length} ${name} remaining. Sending to reserves.`);
-                units.forEach(u => u.sendToReserve());
-                line.reserves.push(...units);
-            }
+        // Collect remaining units
+        const remainingUnits: Unit[] = [];
+        unitsMap.forEach((units) => {
+            remainingUnits.push(...units);
         });
+
+        if (handleReserves) {
+            // Add remaining units to reserves
+            if (remainingUnits.length > 0) {
+                console.log(`[SlotFillingAlgorithm] ${remainingUnits.length} units remaining. Sending to reserves.`);
+                remainingUnits.forEach(u => u.sendToReserve());
+                line.reserves.push(...remainingUnits);
+            }
+            return []; // All handled
+        } else {
+            // Return remaining units for further processing
+            return remainingUnits;
+        }
     }
 }
