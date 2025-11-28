@@ -1,0 +1,120 @@
+{
+    "lineas": [
+        {
+            "id": 1,
+            "nombre": "primera-linea",
+            "orden-ataque":"5",
+            "prioridad-posicion-terrestre": {
+                "1": "hoplita",
+                "2": "gigante-vapor",
+                "3": "espadachin",
+                "4": "lancero",
+                "5": "fusilero",
+                "6": "arquero",
+                "7": "hondero"
+            },
+            "prioridad-posicion-maritima": {
+                "1": "barco-lanzallamas",
+                "2": "barco-espolon-vapor",
+                "3": "barco-espolon-comun",
+                "4": "barco-mortero",
+                "5": "barco-catapulta",
+                "6": "barco-ballesta"
+            },
+            "prioridad-ataque": {
+                "1": "primera-linea",
+                "2": "luchadores-distancia",
+                "3": "artilleria",
+                "4": "flancos"
+            }
+        },
+        {
+            "id": 2,
+            "nombre": "luchadores-distancia",
+            "orden-ataque":"4",
+            "prioridad-posicion-terrestre": {
+                "1": "fusilero",
+                "2": "arquero",
+                "3": "hondero"
+            },
+            "prioridad-posicion-maritima": {
+                "1": "barco-mortero",
+                "2": "barco-catapulta",
+                "3": "barco-ballesta"
+            },
+            "prioridad-ataque": {
+                "1": "primera-linea",
+                "2": "flancos",
+                "3": "luchadores-distancia"
+            }
+        },
+        {
+            "id": 3,
+            "nombre": "artilleria",
+            "orden-ataque":"3",
+            "prioridad-posicion-terrestre": {
+                "1": "mortero",
+                "2": "catapulta",
+                "3": "ariete"
+            },
+            "prioridad-posicion-maritima": {
+                "1": "barco-lanzamisiles",
+                "2": "submarino"
+            },
+            "prioridad-ataque": {
+                "1": "primera-linea",
+                "2": "flancos"
+            }
+        },
+        {
+            "id": 3,
+            "nombre": "flancos",
+            "orden-ataque":"6",
+            "prioridad-posicion-terrestre": {
+                "1": "espadachin",
+                "2": "lancero"
+            },
+            "prioridad-posicion-maritima": {
+                "1": "barco-espolon-comun"
+            },
+            "prioridad-ataque": {
+                "1": "flancos",
+                "2": "luchadores-distancia",
+                "3": "artilleria",
+                "4": "primera-linea"
+            }
+        },
+        {
+            "id": 4,
+            "nombre": "anti-aerea",
+            "orden-ataque":"1",
+            "prioridad-posicion-terrestre": {
+                "1": "girocoptero"
+            },
+            "prioridad-posicion-maritima": {
+                "1": "lancha-palas"
+            },
+            "prioridad-ataque": {
+                "1": "bombarderos",
+                "2": "anti-aerea"
+            }
+        },
+        {
+            "id": 5,
+            "nombre": "bombarderos",
+            "orden-ataque":"2",
+            "prioridad-posicion-terrestre": {
+                "1": "bombardero"
+            },
+            "prioridad-posicion-maritima": {
+                "1": "barco-portaglobos"
+            },
+            "prioridad-ataque": {
+                "1": "artilleria",
+                "2": "luchadores-distancia",
+                "3": "primera-linea",
+                "4": "flancos"
+            }
+        }
+    ]
+}

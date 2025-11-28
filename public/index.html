@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ikariam Battle Simulator</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/battlefieldMatrix.css">
+</head>
+
+<body>
+    <div class="container">
+        <h1>IKARIAM BATTLE SIMULATOR</h1>
+
+        <!-- Battle Configuration -->
+        <div id="config-screen">
+            <div class="config-row">
+                <label>Battle Type:</label>
+                <select id="battleType" class="input-game">
+                    <option value="terrestrial">🏛️ Terrestrial</option>
+                    <option value="maritime">⚓ Maritime</option>
+                </select>
+
+                <label>Level:</label>
+                <input type="number" id="level" class="input-game" value="25" min="1" max="66">
+            </div>
+
+            <!-- Attacker Configuration -->
+            <div class="card-game">
+                <h2>⚔️ ATTACKER</h2>
+                <div class="config-row">
+                    <label>Hephaestus Level:</label>
+                    <select id="attackerHephaestus" class="input-game">
+                        <option value="0">Level 0</option>
+                        <option value="1">Level 1</option>
+                        <option value="2">Level 2</option>
+                        <option value="3">Level 3</option>
+                        <option value="4">Level 4</option>
+                        <option value="5">Level 5</option>
+                    </select>
+                </div>
+
+                <div id="attackerUnits" class="units-list"></div>
+
+                <button class="btn-game" id="addAttackerUnitBtn">➕ Add Unit</button>
+            </div>
+
+            <!-- Defender Configuration -->
+            <div class="card-game">
+                <h2>🛡️ DEFENDER</h2>
+                <div class="config-row">
+                    <label>Hephaestus Level:</label>
+                    <select id="defenderHephaestus" class="input-game">
+                        <option value="0">Level 0</option>
+                        <option value="1">Level 1</option>
+                        <option value="2">Level 2</option>
+                        <option value="3">Level 3</option>
+                        <option value="4">Level 4</option>
+                        <option value="5">Level 5</option>
+                    </select>
+                </div>
+
+                <div id="defenderUnits" class="units-list"></div>
+
+                <button class="btn-game" id="addDefenderUnitBtn">➕ Add Unit</button>
+            </div>
+
+            <div class="actions">
+                <button class="btn-game btn-primary" onclick="app.runSimulation()">▶️ START FULL BATTLE</button>
+                <button class="btn-game btn-primary step-start-button" onclick="app.startStepMode()">🎯 START STEP
+                    MODE</button>
+            </div>
+
+            <div class="actions">
+                <button class="btn-game" onclick="app.saveConfig()">💾 Save Setup</button>
+                <button class="btn-game" onclick="app.loadConfig()">📂 Load</button>
+            </div>
+        </div>
+
+        <!-- Step Mode Controls (OUTSIDE config-screen so they stay visible) -->
+        <div class="step-controls" style="display: none;">
+            <div class="round-status">
+                <span>Round: <strong id="current-round">0</strong> / 60</span>
+                <span class="status-badge" id="battle-status">Not Started</span>
+            </div>
+            <div class="button-group">
+                <button class="btn-game btn-primary next-round-button" disabled>▶️ Next Round</button>
+                <button class="btn-game btn-danger reset-button" disabled>🔄 Reset Battle</button>
+            </div>
+
+            <!-- Live Battle Status -->
+            <div class="card-game live-status">
+                <h3>⚔️ Battle Status</h3>
+                <div class="stats-grid">
+                    <div class="stat-box attacker-box">
+                        <h4>⚔️ ATTACKER</h4>
+                        <p>Alive: <strong id="live-attacker-alive">0</strong></p>
+                        <p>Casualties: <strong id="live-attacker-casualties">0</strong></p>
+                        <p>Damage Dealt: <strong id="live-attacker-damage">0</strong></p>
+                    </div>
+                    <div class="stat-box defender-box">
+                        <h4>🛡️ DEFENDER</h4>
+                        <p>Alive: <strong id="live-defender-alive">0</strong></p>
+                        <p>Casualties: <strong id="live-defender-casualties">0</strong></p>
+                        <p>Damage Dealt: <strong id="live-defender-damage">0</strong></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Battlefield Matrix Visualization -->
+            <div id="battlefield-matrix-container"></div>
+
+            <!-- Unit Summary Table -->
+            <div id="unit-summary-container" class="unit-summary" style="display: none;">
+                <h3>📊 Unit Summary</h3>
+                <div id="unit-summary-table"></div>
+            </div>
+        </div>
+
+        <!-- Add Unit Modal -->
+        <div id="addUnitModal" class="modal hidden">
+            <div class="modal-content card-game">
+                <h2>Add Unit</h2>
+
+                <div class="config-row">
+                    <label>Unit Name:</label>
+                    <select id="modalUnitName" class="input-game">
+                        <option value="hoplita">Hoplita</option>
+                        <option value="espadachin">Espadachín</option>
+                        <option value="lancero">Lancero</option>
+                        <option value="arquero">Arquero</option>
+                        <option value="hondero">Hondero</option>
+                        <option value="fusilero">Fusilero</option>
+                        <option value="catapulta">Catapulta</option>
+                        <option value="mortero">Mortero</option>
+                        <option value="ariete">Ariete</option>
+                        <option value="gigante-vapor">Gigante a Vapor</option>
+                        <option value="girocoptero">Girocóptero</option>
+                        <option value="bombardero">Bombardero</option>
+                        <option value="cocinero">Cocinero</option>
+                        <option value="medico">Médico</option>
+                    </select>
+                </div>
+
+                <div class="config-row">
+                    <label>Quantity:</label>
+                    <input type="number" id="modalQuantity" class="input-game" value="100" min="1" max="9999">
+                </div>
+
+                <div class="config-row">
+                    <label>Upgrade Level:</label>
+                    <select id="modalUpgradeLevel" class="input-game">
+                        <option value="0">Level 0</option>
+                        <option value="1">Level 1</option>
+                        <option value="2" selected>Level 2</option>
+                        <option value="3">Level 3</option>
+                    </select>
+                </div>
+
+                <div class="actions">
+                    <button class="btn-game btn-primary" onclick="app.confirmAddUnit()">Add</button>
+                    <button class="btn-game" onclick="app.closeModal()">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Battle Report -->
+        <div id="report-screen" class="hidden">
+            <div class="card-game">
+                <h1 id="reportTitle">BATTLE REPORT</h1>
+
+                <div id="winnerBanner" class="winner-banner"></div>
+
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <h3>⚔️ ATTACKER</h3>
+                        <p id="attackerInitial"></p>
+                        <p id="attackerSurviving"></p>
+                        <p id="attackerCasualties"></p>
+                        <p id="attackerDamage"></p>
+                    </div>
+
+                    <div class="stat-box">
+                        <h3>🛡️ DEFENDER</h3>
+                        <p id="defenderInitial"></p>
+                        <p id="defenderSurviving"></p>
+                        <p id="defenderCasualties"></p>
+                        <p id="defenderDamage"></p>
+                    </div>
+                </div>
+
+                <h3>Detailed Unit Statistics</h3>
+                <table class="table-game">
+                    <thead>
+                        <tr>
+                            <th>Unit</th>
+                            <th>Initial</th>
+                            <th>Final</th>
+                            <th>Casualties</th>
+                            <th>Damage Dealt</th>
+                        </tr>
+                    </thead>
+                    <tbody id="unitStatsTable"></tbody>
+                </table>
+
+                <div class="actions">
+                    <button class="btn-game" onclick="app.exportJSON()">💾 Export JSON</button>
+                    <button class="btn-game" onclick="app.exportTXT()">💾 Export TXT</button>
+                    <button class="btn-game" onclick="app.newBattle()">🔄 New Battle</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="scripts/battlefieldMatrix.js"></script>
+    <script src="dist/bundle.js?v=modal_fix_v1"></script>
+</body>
+
+</html>

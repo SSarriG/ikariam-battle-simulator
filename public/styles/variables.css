@@ -1,0 +1,34 @@
+/* Ikariam Color Palette & Design System */
+
+:root {
+  /* Primary Colors */
+  --bg-primary: #fdf7dd;
+  --fg-primary: #612d04;
+  --color-primary: #eccf8e;
+  --color-secondary: #fbf3d0;
+  
+  /* Surface Colors */
+  --card-bg: #ffffff;
+  --muted-bg: #f8e5b1;
+  --accent: #d4b87f;
+  
+  /* Borders */
+  --border: #c3a171;
+  --border-decorative: #c9a584;
+  
+  /* Gradients */
+  --gradient-panel: linear-gradient(to bottom, #fdf7dd, #f8e5b1);
+  --gradient-button: linear-gradient(to bottom, #eccf8e, #d4b87f);
+  
+  /* Typography */
+  --font-header: Arial, sans-serif;
+  --font-body: 'Lucida Grande', sans-serif;
+  
+  /* Font Sizes */
+  --text-xs: 10px;
+  --text-sm: 11px;
+  --text-base: 12px;
+  --text-lg: 14px;
+  --text-xl: 16px;
+  --text-2xl: 18px;
+}

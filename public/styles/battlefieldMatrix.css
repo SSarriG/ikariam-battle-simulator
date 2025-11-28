@@ -1,0 +1,326 @@
+/* Battlefield Matrix Styles - Ikariam Theme */
+
+.battlefield-matrix {
+    margin: 20px 0;
+    padding: 20px;
+    background: linear-gradient(to bottom, #fdf7dd, #f8e5b1);
+    border: 2px solid #c3a171;
+    border-radius: 3px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.battlefield-matrix h3 {
+    color: #612d04;
+    text-align: center;
+    margin: 10px 0;
+    font-size: 18px;
+    font-family: Arial, sans-serif;
+    font-weight: 700;
+    text-shadow: none;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(13, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 8px 4px;
+    /* Updated gap */
+    padding: 20px;
+    background: #fbf3d0;
+    border: 1px solid #c3a171;
+    border-radius: 3px;
+    /* Allow grid to size based on content */
+    width: fit-content;
+    margin: 0 auto;
+}
+
+.grid-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Remove background and border from cell itself, it's just a wrapper now */
+    background: transparent;
+    border: none;
+    width: 48px;
+    height: 48px;
+    overflow: visible;
+    /* Allow absolute elements to spill out */
+}
+
+/* New Slot Design */
+.slot-container {
+    position: relative;
+    width: 48px;
+    height: 48px;
+}
+
+.slot-upper {
+    /* No longer needed as flex container since children are absolute/relative */
+    width: 100%;
+    height: 100%;
+}
+
+.slot-visual {
+    width: 48px;
+    height: 48px;
+    background-color: #F8E5B1;
+    border: 1px solid #c3a171;
+    border-radius: 3px;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.1);
+}
+
+.empty-slot .slot-visual {
+    background-image: none !important;
+    background-color: #F8E5B1;
+    opacity: 0.5;
+}
+
+/* Vertical Bars */
+.bars-container {
+    position: absolute;
+    left: 38px;
+    /* Updated left */
+    top: 0;
+    display: flex;
+    flex-direction: row;
+    gap: 1px;
+    /* Updated gap */
+    height: 48px;
+    z-index: 10;
+}
+
+.bar-vertical {
+    width: 6px;
+    height: 100%;
+    background: #e6dec5;
+    border: 1px solid #9e8b6b;
+    border-radius: 3px;
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    overflow: hidden;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.bar-vertical .fill {
+    width: 100%;
+    transition: height 0.5s ease;
+    border-radius: 1px;
+}
+
+.bar-vertical.hp .fill {
+    /* Glossy Green Gradient */
+    background: linear-gradient(to right, #2e7d32 0%, #66bb6a 50%, #2e7d32 100%);
+    box-shadow: 0 0 2px rgba(46, 125, 50, 0.5);
+}
+
+.bar-vertical.ammo .fill {
+    /* Glossy Orange Gradient */
+    background: linear-gradient(to right, #ef6c00 0%, #ffa726 50%, #ef6c00 100%);
+    box-shadow: 0 0 2px rgba(239, 108, 0, 0.5);
+}
+
+/* Counter Tag */
+.counter-tag {
+    position: absolute;
+    top: 38px;
+    /* Updated top */
+    left: 50%;
+    transform: translateX(-66%);
+    /* Updated transform */
+    width: 48px;
+    height: 16px;
+    background: #ffffff;
+    border: 1px solid #c3a171;
+    border-radius: 3px;
+    font-size: 8px;
+    font-weight: 700;
+    color: #612d04;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Lucida Grande', Arial, sans-serif;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    white-space: nowrap;
+    overflow: hidden;
+    z-index: 10;
+}
+
+.counter-tag.dead-only {
+    color: #d32f2f;
+    background: #fff0f0;
+}
+
+.deaths-round {
+    color: #d32f2f;
+    font-weight: 700;
+}
+
+.battlefield-divider {
+    height: 2px;
+    background: linear-gradient(to right,
+            transparent 0%,
+            #c3a171 20%,
+            #c3a171 80%,
+            transparent 100%);
+    margin: 20px 0;
+}
+
+/* Tooltip styles */
+.slot-container {
+    position: relative;
+}
+
+.slot-container .tooltip {
+    visibility: hidden;
+    opacity: 0;
+    position: absolute;
+    z-index: 1000;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #ffffff;
+    border: 2px solid #c3a171;
+    border-radius: 3px;
+    padding: 8px 12px;
+    font-size: 11px;
+    font-family: 'Lucida Grande', Arial, sans-serif;
+    color: #612d04;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: opacity 0.2s, visibility 0.2s;
+    pointer-events: none;
+    margin-bottom: 5px;
+}
+
+.slot-container .tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: #c3a171;
+}
+
+.slot-visual:hover~.tooltip,
+.counter-tag:hover~.tooltip,
+.slot-container:hover .tooltip {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+    .grid {
+        gap: 16px 8px;
+        padding: 10px;
+    }
+
+    .slot-visual {
+        width: 36px;
+        height: 36px;
+    }
+
+    .bars-container {
+        height: 36px;
+    }
+
+    .bar-vertical {
+        width: 4px;
+    }
+
+    .counter-tag {
+        width: 36px;
+        font-size: 7px;
+        height: 14px;
+    }
+
+    .grid-cell {
+        width: 48px;
+        height: 55px;
+    }
+}
+
+/* Unit Summary Styles */
+.unit-summary {
+    margin: 20px 0;
+    padding: 20px;
+    background: linear-gradient(to bottom, #fdf7dd, #f8e5b1);
+    border: 2px solid #c3a171;
+    border-radius: 3px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.unit-summary h3 {
+    color: #612d04;
+    text-align: center;
+    margin: 0 0 15px 0;
+    font-size: 16px;
+    font-family: Arial, sans-serif;
+    font-weight: 700;
+}
+
+.unit-summary-table {
+    display: table;
+    width: 100%;
+    max-width: 600px;
+    margin: 0 auto;
+    background: #ffffff;
+    border: 1px solid #c3a171;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.unit-row {
+    display: table-row;
+}
+
+.unit-row:nth-child(even) {
+    background: #fbf3d0;
+}
+
+.unit-cell {
+    display: table-cell;
+    padding: 8px 12px;
+    border-bottom: 1px solid #e6dec5;
+    font-family: 'Lucida Grande', Arial, sans-serif;
+    font-size: 12px;
+    color: #612d04;
+}
+
+.unit-cell.attacker {
+    text-align: right;
+    font-weight: 600;
+}
+
+.unit-cell.unit-name {
+    text-align: center;
+    font-weight: 700;
+    color: #4a2408;
+}
+
+.unit-cell.defender {
+    text-align: left;
+    font-weight: 600;
+}
+
+.casualties {
+    color: #d32f2f;
+    font-weight: 700;
+}
+
+.generals-lost {
+    color: #d32f2f;
+    font-size: 10px;
+    font-style: italic;
+}
+
+.totals-row {
+    background-color: #e6dec5 !important;
+    border-top: 2px solid #c3a171;
+    font-weight: bold;
+}

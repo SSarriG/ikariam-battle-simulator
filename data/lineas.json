@@ -1,0 +1,111 @@
+{
+    "lineas": [
+        {
+            "nombre": "primera-linea",
+            "orden-ataque": 5,
+            "prioridad-ataque": [
+                "primera-linea",
+                "luchadores-distancia",
+                "artilleria",
+                "flancos"
+            ],
+            "prioridad-posicion-terrestre": [
+                "hoplita",
+                "gigante-vapor",
+                "espadachin",
+                "lancero",
+                "fusilero",
+                "arquero",
+                "hondero"
+            ],
+            "prioridad-posicion-maritima": [
+                "barco-lanzallamas",
+                "barco-espolon-vapor",
+                "barco-espolon-comun"
+            ]
+        },
+        {
+            "nombre": "luchadores-distancia",
+            "orden-ataque": 4,
+            "prioridad-ataque": [
+                "primera-linea",
+                "flancos",
+                "luchadores-distancia"
+            ],
+            "prioridad-posicion-terrestre": [
+                "fusilero",
+                "arquero",
+                "hondero"
+            ],
+            "prioridad-posicion-maritima": [
+                "barco-mortero",
+                "barco-catapulta",
+                "barco-ballesta"
+            ]
+        },
+        {
+            "nombre": "flancos",
+            "orden-ataque": 6,
+            "prioridad-ataque": [
+                "flancos",
+                "luchadores-distancia",
+                "artilleria",
+                "primera-linea"
+            ],
+            "prioridad-posicion-terrestre": [
+                "espadachin",
+                "lancero"
+            ],
+            "prioridad-posicion-maritima": [
+                "barco-espolon-comun"
+            ]
+        },
+        {
+            "nombre": "artilleria",
+            "orden-ataque": 3,
+            "prioridad-ataque": [
+                "primera-linea",
+                "flancos"
+            ],
+            "prioridad-posicion-terrestre": [
+                "mortero",
+                "catapulta",
+                "ariete"
+            ],
+            "prioridad-posicion-maritima": [
+                "barco-lanzamisiles",
+                "submarino"
+            ]
+        },
+        {
+            "nombre": "bombarderos",
+            "orden-ataque": 2,
+            "prioridad-ataque": [
+                "artilleria",
+                "luchadores-distancia",
+                "primera-linea",
+                "flancos"
+            ],
+            "prioridad-posicion-terrestre": [
+                "bombardero"
+            ],
+            "prioridad-posicion-maritima": [
+                "barco-portaglobos"
+            ]
+        },
+        {
+            "nombre": "anti-aerea",
+            "orden-ataque": 1,
+            "prioridad-ataque": [
+                "bombarderos",
+                "anti-aerea"
+            ],
+            "prioridad-posicion-terrestre": [
+                "girocoptero"
+            ],
+            "prioridad-posicion-maritima": [
+                "lancha-palas"
+            ]
+        }
+    ]
+}

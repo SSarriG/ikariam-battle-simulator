@@ -1,0 +1,2133 @@
+﻿Simulador de Batallas de Ikariam - Documentación Técnica Completa
+Documento de Arquitectura e Implementación
+Autor: Ingeniero de Software Experto
+Fecha: 24 de Noviembre de 2025
+Versión: 3.0 - ACTUALIZACIÓN MAYOR: Mecánicas Avanzadas de Combate
+________________
+
+
+⚠️ CAMBIOS CRÍTICOS - Versión 3.0
+Esta versión incorpora hallazgos del estudio académico de AT Barbarossa y Xanto sobre mecánicas avanzadas del sistema de combate de Ikariam. Los cambios fundamentales son:
+1. Attacking Matrix (Am Theory)
+* El sistema NO distribuye ataques "unidad por unidad"
+* Cada línea forma una matriz n×m donde las filas atacan slots específicos
+* La distribución sigue un patrón matemático preciso basado en módulo
+2. Slot Renumbering
+* Los slots NO se atacan en orden físico [1,2,3,4,5,6,7]
+* Cada tipo de línea tiene un orden de renumeración específico
+* Primera/Segunda Línea: [6, 4, 2, 1, 3, 5, 7] (slot 1 recibe más daño)
+3. Damage Redistribution (3 tipos)
+* Reserve-Redistribution (RR): Entre rondas, daño se redistribuye entre todas las unidades vivas
+* Slot-Redistribution (SR): Después que una línea dispara, daño se redistribuye dentro de slots
+* Immediate-Redistribution (IR): Durante ataque, daño se redistribuye inmediatamente (Portaglobos/Espolones)
+4. Kill Types (6 tipos diferentes)
+* 1-kill, D-kill, P-kill, I-kill, IR-kill, M-kill
+* El tipo de kill depende de la composición de la matriz de ataque
+* Columnas pares vs impares tienen comportamientos diferentes
+5. Accuracy NO es siempre 100%
+* Algunas unidades (ej: Spearmen 70%) tienen precisión variable
+* Solo el % de unidades dispara efectivamente
+6. Mejoras Individuales + Hefesto Global
+* Mejoras: Aplicadas INDIVIDUALMENTE a cada unidad (puedes tener grupos con diferentes mejoras)
+* Hefesto: Aplicado GLOBALMENTE a todas las unidades según nivel (0-5)
+7. Portaglobos/Espolones - Immediate Redistribution
+* NO es "sistema de turnos" ni "cobertura mutua"
+* Es Immediate Redistribution (IR) activada por umbral de unidades
+* El daño se DIVIDE entre todas las unidades del grupo
+________________
+
+
+Tabla de Contenidos
+1. Investigación del Sistema de Batallas
+2. Mecánicas de Combate Avanzadas
+3. Mecánicas de Combate Terrestre
+4. Mecánicas de Combate Marítimo
+5. Arquitectura del Sistema
+6. Plan de Implementación por Fases
+7. Prompts para Agentes IA
+8. Criterios de Aceptación y QA
+________________
+
+
+1. Investigación del Sistema de Batallas
+1.1 Mecánicas Fundamentales de Ikariam
+1.1.1 Estructura del Campo de Batalla
+El sistema de batallas de Ikariam utiliza una estructura de campo de batalla por slots que varía según el nivel de la ciudad (terrestre) o puerto (marítimo).
+Tipos de Líneas de Batalla:
+1. Primera Línea (primera-linea): Unidades de combate cuerpo a cuerpo pesadas
+2. Luchadores a Distancia (luchadores-distancia): Unidades de ataque a distancia
+3. Flancos: Unidades ligeras de infantería
+4. Artillería: Unidades de asedio y bombardeo pesado
+5. Bombarderos: Unidades aéreas ofensivas
+6. Anti-aérea (anti-aerea): Unidades de defensa contra bombarderos
+Análisis de campos.json:
+Batallas Terrestres:
+* Nivel 1-4 ciudad: 3 slots primera línea, 3 luchadores distancia, 0 flancos, 1 artillería (30 unidades/slot)
+* Nivel 5-9 ciudad: 5+5+2+2 slots (30 unidades/slot)
+* Nivel 10-16 ciudad: 7+7+4+3 slots (30 unidades/slot)
+* Nivel 17-24 ciudad: 7+7+6+4 slots (40/30 unidades/slot)
+* Nivel 25+ ciudad: 7+7+6+5 slots (50/40/30 unidades/slot)
+Batallas Marítimas:
+* Nivel 0-7 puerto: 3+3+0+1 slots (15 unidades/slot)
+* Nivel 8-14 puerto: 5+5+2+2 slots (15 unidades/slot)
+* Nivel 15-21 puerto: 7+7+4+3 slots (15 unidades/slot)
+* Nivel 22-28 puerto: 7+7+6+4 slots (20/15 unidades/slot)
+* Nivel 29+ puerto: 7+7+6+5 slots (25/20/15 unidades/slot)
+Bombarderos y Anti-aérea:
+* Terrestres: 1-2 slots con capacidad 10-30 unidades
+* Marítimas: 1-2 slots con capacidad 10-15 unidades
+1.1.2 Sistema de Daño y Armadura
+Fórmula Base de Daño:
+Daño Efectivo = MAX(0, Daño Atacante - Armadura Defensor)
+Componentes del Daño:
+* Daño Base: Definido en unidades.json para cada tipo de unidad
+* Armadura: Reduce el daño recibido punto por punto
+* Precisión (Accuracy): NO siempre 100% - algunas unidades tienen precisión variable
+* Puntos de Golpe (HP): Vida total de la unidad
+Sistema de Mejoras INDIVIDUALES:
+⚠️ IMPORTANTE: Las mejoras se aplican INDIVIDUALMENTE a cada unidad, NO globalmente por tipo.
+Cada unidad puede tener nivel de mejora 0, 1, 2, o 3:
+* Nivel 0: Stats base sin mejoras
+* Nivel 1: daño-mejora1, armadura-mejora1
+* Nivel 2: daño-mejora2, armadura-mejora2
+* Nivel 3: daño-mejora3, armadura-mejora3
+Ejemplo de Composición Mixta:
+Atacante tiene:
+* 100 espadachines mejora 0 (daño 10, armadura 0)
+* 50 espadachines mejora 2 (daño 13, armadura 4)
+* 30 espadachines mejora 3 (daño 16, armadura 7)
+Total: 180 espadachines con 3 niveles de mejora diferentes
+Los valores de mejora están definidos en unidades.json para cada tipo de unidad.
+1.1.3 Efecto Hefesto (Fragua de Hefesto) - GLOBAL
+⚠️ IMPORTANTE: Hefesto se aplica GLOBALMENTE a todas las unidades del bando, independiente de sus mejoras individuales.
+Tabla Completa de Bonificaciones de Hefesto:
+Nivel
+	Armadura Bonus
+	Daño Bonus
+	0
+	+0
+	+0%
+	1
+	+0
+	+7.5%
+	2
+	+10
+	+7.5%
+	3
+	+10
+	+10%
+	4
+	+20
+	+12.5%
+	5
+	+20
+	+15%
+	
+
+Aplicación Combinada (Mejora Individual + Hefesto Global):
+Armadura Final = Armadura Base + Armadura Mejora Individual + Armadura Hefesto Global
+Daño Final = (Daño Base + Daño Mejora Individual) × (1 + Bonus Hefesto Global)
+Ejemplo con Gigante a Vapor:
+* HP base: 184
+* Armadura base: 3
+* Daño base: 42
+Con Mejora Individual 3:
+* Armadura mejora3: 9
+* Daño mejora3: 48
+Con Hefesto Global nivel 5:
+* Armadura final = 3 + 9 + 20 = 32
+* Daño final = (42 + 6) × 1.15 = 48 × 1.15 = 55.2
+1.2 Distribución de Unidades en Slots
+1.2.1 Algoritmo de Llenado de Slots
+Análisis de lineas.json:
+Cada línea tiene una prioridad de posición específica que define el orden en que las unidades llenan los slots disponibles.
+Ejemplo Primera Línea Terrestre:
+1. Hoplita (tamaño 1)
+2. Gigante a Vapor (tamaño 3)
+3. Espadachín (tamaño 1)
+4. Lancero (tamaño 1)
+5. Fusilero (tamaño 4)
+6. Arquero (tamaño 1)
+7. Hondero (tamaño 1)
+Algoritmo de Distribución:
+Para cada slot en la línea:
+capacidad_slot = tamaño-por-hueco
+unidades_restantes = capacidad_slot
+Para cada grupo_unidad en orden de prioridad:
+cantidad_disponible = grupos[tipo_unidad][nivel_mejora]
+tamaño_unidad = unidades.json[tipo_unidad].tamaño
+unidades_que_caben = MIN(cantidad_disponible, unidades_restantes / tamaño_unidad)
+
+asignar unidades_que_caben al slot
+unidades_restantes -= unidades_que_caben × tamaño_unidad
+
+Si unidades_restantes == 0: pasar al siguiente slot
+
+Comportamiento Clave:
+* Las unidades se distribuyen por prioridad dentro de la línea
+* Grupos con diferentes mejoras se tratan como grupos separados
+* Cada slot tiene una capacidad máxima basada en el tamaño total de unidades
+* Una unidad con tamaño 5 ocupa 5 puntos de capacidad en un slot
+* Los slots se llenan completamente antes de pasar al siguiente
+1.3 Orden de Ataque y Prioridades
+1.3.1 Secuencia de Ataque por Ronda
+Análisis de lineas.json - orden-ataque:
+1. Anti-aérea (orden 1): Ataca primero a bombarderos
+2. Bombarderos (orden 2): Ataca a artillería, luchadores distancia
+3. Artillería (orden 3): Ataca a primera línea, flancos
+4. Luchadores a Distancia (orden 4): Ataca a primera línea, flancos
+5. Primera Línea (orden 5): Ataca a primera línea enemiga, luchadores distancia
+6. Flancos (orden 6): Ataca a flancos enemigos, luchadores distancia
+Importante: El orden define qué líneas atacan primero en cada ronda.
+1.3.2 Prioridades de Ataque por Línea
+Análisis de lineas.json - prioridad-ataque:
+Cada línea tiene objetivos prioritarios definidos:
+Anti-aérea:
+1. Bombarderos (objetivo primario)
+2. Anti-aérea (objetivo secundario)
+Bombarderos:
+1. Artillería
+2. Luchadores a distancia
+3. Primera línea
+4. Flancos
+Artillería:
+1. Primera línea
+2. Flancos
+Luchadores a Distancia:
+1. Primera línea
+2. Flancos
+3. Luchadores a distancia (objetivo terciario)
+Primera Línea:
+1. Primera línea enemiga
+2. Luchadores a distancia
+3. Artillería
+4. Flancos
+Flancos:
+1. Flancos enemigos
+2. Luchadores a distancia
+3. Artillería
+4. Primera línea
+1.3.3 Sistema de Munición
+Análisis de unidades.json - campo munición:
+Unidades con munición limitada:
+* Bombardero terrestre: 2 rondas de munición
+* Hondero: 5 rondas
+* Girocóptero: 4 rondas
+* Fusilero: 3 rondas
+* Arquero: 3 rondas
+* Barco ballesta: 7 rondas
+* Barco catapulta: 6 rondas
+* Barco mortero: 5 rondas
+* Barco lanzamisiles: 2 rondas
+* Submarino: 4 rondas
+* Lancha palas: 5 rondas
+* Barco portaglobos: 5 rondas
+* Catapulta terrestre: 5 rondas
+* Mortero terrestre: 3 rondas
+Unidades sin munición (null): Combaten indefinidamente hasta morir
+* Hoplita, Gigante a Vapor, Espadachín, Lancero, Ariete
+* Barcos espolón (común y vapor), Barco lanzallamas
+Mecánica:
+Si unidad tiene munición Y munición_restante > 0:
+realizar_ataque()
+munición_restante -= 1
+Si munición_restante == 0:
+unidad se retira a la reserva
+unidad no puede atacar ni recibir daño
+Si no tiene munición (null):
+puede atacar indefinidamente
+________________
+
+
+2. Mecánicas de Combate Avanzadas
+2.1 Attacking Matrix (Am Theory)
+Fuente: Estudio académico de AT Barbarossa y Xanto
+2.1.1 Concepto Fundamental
+Cada línea de batalla forma una matriz de ataque (Am) de dimensiones n × m donde:
+* n = número máximo de unidades por slot (ej: 30, 40, 50)
+* m = número de slots de la línea (ej: 7 slots)
+Cada fila i de la matriz ataca el slot j donde j ≡ i (mod m).
+Ejemplo:
+35 Steam Rams distribuidos en 7 slots × 5 unidades = matriz 5×7
+Fila 1 ataca slot: 1 mod 7 = 1
+Fila 2 ataca slot: 2 mod 7 = 2
+Fila 3 ataca slot: 3 mod 7 = 3
+Fila 4 ataca slot: 4 mod 7 = 4
+Fila 5 ataca slot: 5 mod 7 = 5
+2.1.2 Implicaciones de la Matriz
+Distribución de Ataques:
+* NO todos los slots reciben la misma cantidad de ataques
+* El slot renumerado como "1" recibe más ataques (más filas lo atacan)
+* Slots externos reciben menos ataques
+Matriz Completa vs Incompleta:
+* Completa: Todos los slots llenos (n unidades cada uno)
+* Incompleta: Algunos slots parcialmente llenos
+* Slots incompletos alteran el patrón de distribución
+2.2 Slot Renumbering
+Fuente: Estudio académico - Sección 2.2
+2.2.1 Standard Renumbering
+Los slots NO se atacan en orden físico [1,2,3,4,5,6,7]. Cada tipo de línea tiene un orden de renumeración específico:
+Primera Línea y Segunda Línea:
+Orden de daño: [6, 4, 2, 1, 3, 5, 7]
+* Slot físico 1 recibe más daño (renumerado como "1")
+* Slots centrales (2, 3) reciben segundo nivel de daño
+* Slots intermedios (4, 5) reciben tercer nivel
+* Slots externos (6, 7) reciben menos daño
+Tercera Línea (Artillería):
+Orden de daño: [5, 3, 1, 2, 4]
+* Máximo 5 slots de artillería
+* Patrón diferente a primera/segunda línea
+Flancos:
+Orden de daño: [6, 4, 2, 1, 3, 5]
+* Máximo 6 slots
+Bombarderos:
+Orden de daño: [1, 2]
+* Máximo 2 slots
+Anti-Aérea:
+Orden de daño: [2, 1]
+* Máximo 2 slots
+2.2.2 Impacto Estratégico
+Posicionamiento Defensivo:
+* Colocar unidades más fuertes en slot físico 1 (recibe más daño)
+* Slots externos (6, 7) son más seguros para unidades frágiles
+Cálculo de Daño:
+* El slot renumerado "1" recibe ataques de más filas de la matriz Am
+* Necesario considerar renumeración al calcular daño esperado por slot
+2.3 Damage Redistribution
+Fuente: Estudio académico - Secciones 4, 8, 10
+2.3.1 Reserve-Redistribution (RR)
+Cuándo: Al inicio de cada ronda
+Mecánica:
+damage_per_slot = (total_damage / total_units_alive) × units_in_slot
+El daño total acumulado se redistribuye entre TODAS las unidades vivas, incluyendo las que están en reserva.
+Ejemplo:
+Ronda 1: 100 hoplitas con HP 56 c/u
+Daño total recibido: 3000
+Ronda 2 inicia: RR distribuye 3000 entre 100 = 30 daño por unidad
+Todas empiezan ronda 2 con HP 26
+2.3.2 Slot-Redistribution (SR)
+Cuándo: Después que una línea dispara
+Mecánica:
+Secuencia:
+1. Segunda línea dispara → SR en primera línea
+2. Primera línea dispara
+El daño se redistribuye dentro de cada slot del objetivo después que el atacante dispara.
+Ejemplo:
+Segunda línea (arqueros) dispara contra primera línea (hoplitas)
+Daño total: 500
+→ SR: distribuir 500 entre todos los hoplitas de primera línea
+Luego primera línea dispara
+2.3.3 Immediate-Redistribution (IR)
+Cuándo: Durante el ataque (inmediatamente)
+Unidades especiales:
+* Portaglobos (umbral ≥30)
+* Espolones a Vapor (umbral ≥80)
+Mecánica:
+Ataque 1 llega → IR divide daño entre todas las unidades del grupo
+Ataque 2 llega → IR divide daño entre todas las unidades del grupo
+...
+Ejemplo con Rocket Ships vs Steam Rams:
+2 Rocket Ships (439 daño c/u) atacan 5 Steam Rams (576 HP c/u)
+Sin IR:
+Rocket 1 → Ram 1 muere, Ram 2 recibe daño
+Rocket 2 → Ram 2 muere
+Resultado: 2 Rams muertos
+Con IR (≥80 Rams juntos):
+Rocket 1 (439 daño) → IR divide entre 5 = 87.8 daño c/u
+Rocket 2 (439 daño) → IR divide entre 5 = 87.8 daño c/u
+Total: 175.6 daño por Ram < 576 HP
+Resultado: 0 Rams muertos
+2.4 Kill Types
+Fuente: Estudio académico - Secciones 5-11
+El estudio identifica 6 tipos diferentes de kill según cómo se aplica el daño:
+2.4.1 One-Shot-kill (1-kill)
+Definición: 1 unidad mata exactamente 1 objetivo
+Ejemplo:
+1 Ram Ship (75 daño) vs 1 Hoplita (56 HP, 1 armadura)
+Daño efectivo: 75 - 1 = 74 > 56
+Resultado: 1 Hoplita muerto
+2.4.2 Direct-kill (D-kill)
+Definición: n unidades atacan secuencialmente hasta matar, sin daño sobrante desperdiciado
+Ejemplo:
+40 Swordsmen (10 daño c/u) vs Hoplitas (56 HP)
+Unidad 1-6 atacan Hoplita 1 → 60 daño → Hoplita muere (4 daño sobrante)
+Daño sobrante SE REASIGNA
+Resultado: Máxima eficiencia
+2.4.3 Pig-kill (P-kill)
+Definición: Similar a D-kill pero daño sobrante se reasigna misteriosamente
+Comportamiento: No completamente entendido en el estudio
+2.4.4 Indirect-kill (I-kill)
+Definición: Kills calculados por división entera
+Fórmula:
+kills = floor(sum(all_attacks) / target_HP)
+Ejemplo:
+100 Hoplitas (18 daño c/u) vs Hoplitas enemigos (56 HP)
+Daño total: 100 × 18 = 1800
+Kills: floor(1800 / 56) = 32 Hoplitas muertos
+2.4.5 IR-kill
+Definición: Kill con Immediate Redistribution
+Aplicable: Portaglobos, Espolones a Vapor cuando superan umbral
+2.4.6 Magical-kill (M-kill)
+Definición: Casos donde se pierde daño inexplicablemente
+Nota: El estudio no logra explicar completamente este tipo
+2.5 Accuracy (Precisión)
+Fuente: Estudio académico - Sección 11.1
+⚠️ CORRECCIÓN: La precisión NO es siempre 100%
+Ejemplo de unidades.json:
+{
+"nombre-unidad": "lancero",
+"precision": 70
+}
+Mecánica:
+Si unidad tiene precision < 100:
+ataques_efectivos = floor(cantidad_unidades × (precision / 100))
+Ejemplo: 12 Spearmen (70% precisión)
+→ Solo 12 × 0.7 = 8 disparan efectivamente
+→ 4 unidades "fallan" su ataque
+Impacto en Am:
+Matriz 12×7 con precisión 70%
+→ Solo 8 filas atacan efectivamente
+→ Filtrar filas según precisión antes de distribuir ataques
+2.6 Incomplete Slots y Battle Field Composition
+Fuente: Estudio académico - Sección 13
+2.6.1 Slots Incompletos
+Problema: Slots con menos unidades de las esperadas rompen Am Theory
+Ejemplo:
+Slot esperado: 30 unidades
+Slot real: 8 unidades
+Daño esperado (Am): 500
+Daño real recibido: < 500 (overflow a otros slots)
+Consecuencia:
+* El daño "sobrante" puede ir a otros slots
+* Necesario detectar slots incompletos y ajustar cálculos
+2.6.2 Composición Completa del Campo
+Principio: La presencia/ausencia de una línea afecta daño en otras líneas
+Ejemplo:
+"The power of an absent second line"
+Con segunda línea presente:
+Primera línea recibe daño X
+Sin segunda línea:
+Primera línea recibe daño Y (Y > X)
+Implicación: Necesario analizar composición completa del battlefield antes de calcular daño
+________________
+
+
+3. Mecánicas de Combate Terrestre
+3.1 Unidades Terrestres
+Análisis detallado de unidades.json:
+3.1.1 Primera Línea Terrestre
+Hoplita:
+* HP: 56, Armadura base: 1, Daño base: 18, Tamaño: 1
+* Mejoras: Daño (19/21/24), Armadura (2/4/7)
+* Precisión: 100%
+* Rol: Unidad tanque básica, económica y efectiva
+Gigante a Vapor (Steam Giant):
+* HP: 184, Armadura base: 3, Daño base: 42, Tamaño: 3
+* Mejoras: Daño (43/45/48), Armadura (4/6/9)
+* Precisión: 100%
+* Rol: Unidad tanque premium, alta resistencia
+3.1.2 Luchadores a Distancia Terrestres
+Hondero:
+* HP: 8, Armadura: 0, Daño base: 3, Tamaño: 1, Munición: 5
+* Mejoras: Daño (4/6/9), Armadura (1/3/6)
+* Precisión: 100%
+* Rol: Unidad económica de hostigamiento
+Arquero:
+* HP: 16, Armadura: 0, Daño base: 5, Tamaño: 1, Munición: 3
+* Mejoras: Daño (6/8/11), Armadura (1/3/6)
+* Precisión: 100%
+* Rol: Unidad estándar de ataque a distancia
+Fusilero:
+* HP: 12, Armadura: 0, Daño base: 29, Tamaño: 4, Munición: 3
+* Mejoras: Daño (30/32/35), Armadura (1/3/6)
+* Precisión: 100%
+* Rol: Unidad de élite con alto daño, ocupa mucho espacio
+3.1.3 Flancos Terrestres
+Lancero:
+* HP: 13, Armadura: 0, Daño base: 4, Tamaño: 1
+* Mejoras: Daño (5/7/10), Armadura (1/3/6)
+* Precisión: 70% (solo 70% de lanceros atacan efectivamente)
+* Rol: Unidad básica de flanqueo
+Espadachín:
+* HP: 18, Armadura: 0, Daño base: 10, Tamaño: 1
+* Mejoras: Daño (11/13/16), Armadura (1/3/6)
+* Precisión: 100%
+* Rol: Unidad mejorada de flanqueo
+3.1.4 Artillería Terrestre
+Ariete (Battering Ram):
+* HP: 88, Armadura base: 1, Daño base: 80, Tamaño: 5, Sin munición
+* Mejoras: Daño (81/83/86), Armadura (2/4/7)
+* Precisión: 100%
+* Rol: Artillería cuerpo a cuerpo, efectiva contra muros e infantería
+Catapulta:
+* HP: 54, Armadura: 0, Daño base: 133, Tamaño: 5, Munición: 5
+* Mejoras: Daño (134/136/139), Armadura (1/3/6)
+* Precisión: 100%
+* Rol: Artillería media, efectiva contra muros y unidades pesadas
+Mortero:
+* HP: 32, Armadura: 0, Daño base: 270, Tamaño: 5, Munición: 3
+* Mejoras: Daño (271/273/276), Armadura (1/3/6)
+* Precisión: 100%
+* Rol: Artillería pesada, máximo daño, muy frágil
+3.1.5 Unidades Aéreas Terrestres
+Girocóptero (Gyrocopter):
+* HP: 29, Armadura: 0, Daño base: 17, Tamaño: 1, Munición: 4
+* Mejoras: Daño (18/20/23), Armadura (1/3/6)
+* Precisión: 100%
+* Rol: Anti-aérea, ataca bombarderos y otros girocópteros
+Bombardero:
+* HP: 40, Armadura: 0, Daño base: 48, Tamaño: 2, Munición: 2
+* Mejoras: Daño (49/51/54), Armadura (1/3/6)
+* Precisión: 100%
+* Rol: Ataque aéreo contra artillería y luchadores a distancia
+3.2 Configuraciones de Campo Terrestre
+Tamaños de Campo según Nivel de Ciudad:
+Nivel Ciudad
+	Primera Línea
+	Luchadores Dist.
+	Flancos
+	Artillería
+	Bombarderos
+	Anti-aérea
+	1-4
+	3×30
+	3×30
+	0×0
+	1×30
+	1×10
+	1×10
+	5-9
+	5×30
+	5×30
+	2×30
+	2×30
+	1×20
+	1×20
+	10-16
+	7×30
+	7×30
+	4×30
+	3×30
+	1×30
+	1×30
+	17-24
+	7×40
+	7×40
+	6×30
+	4×30
+	2×20
+	2×20
+	25+
+	7×50
+	7×50
+	6×40
+	5×30
+	2×30
+	2×30
+	
+
+________________
+
+
+4. Mecánicas de Combate Marítimo
+4.1 Unidades Marítimas
+4.1.1 Primera Línea Marítima
+Barco Lanzallamas (Fire Ship):
+* HP: 219, Armadura base: 8, Daño base: 82, Tamaño: 2, Sin munición
+* Mejoras: Daño (84/88/94), Armadura (10/14/20)
+* Precisión: 100%
+* Rol: Unidad tanque estándar naval
+Barco Espolón a Vapor (Steam Ram):
+* HP: 576, Armadura base: 16, Daño base: 166, Tamaño: 5, Sin munición
+* Mejoras: Daño (168/172/178), Armadura (18/22/28)
+* Precisión: 100%
+* Rol: Super tanque naval con Immediate Redistribution
+* Especial: IR activa con ≥80 unidades juntas
+4.1.2 Luchadores a Distancia Marítimos
+Barco Ballesta:
+* HP: 154, Armadura base: 14, Daño base: 28, Tamaño: 2, Munición: 7
+* Mejoras: Daño (30/34/40), Armadura (16/20/26)
+* Precisión: 100%
+* Rol: Unidad estándar con alta armadura
+Barco Catapulta:
+* HP: 148, Armadura base: 10, Daño base: 45, Tamaño: 3, Munición: 6
+* Mejoras: Daño (47/51/57), Armadura (12/16/22)
+* Precisión: 100%
+* Rol: Unidad de daño medio
+Barco Mortero (Mortar Ship):
+* HP: 154, Armadura base: 6, Daño base: 69, Tamaño: 4, Munición: 5
+* Mejoras: Daño (71/75/81), Armadura (8/12/18)
+* Precisión: 100%
+* Rol: Alto daño, armadura moderada
+4.1.3 Flancos Marítimos
+Barco Espolón Común (Ram Ship):
+* HP: 154, Armadura base: 9, Daño base: 75, Tamaño: 3, Sin munición
+* Mejoras: Daño (77/81/87), Armadura (11/15/21)
+* Precisión: 100%
+* Rol: Unidad de flanqueo con buen equilibrio
+4.1.4 Artillería Marítima
+Barco Lanzamisiles (Rocket Ship):
+* HP: 65, Armadura base: 6, Daño base: 380, Tamaño: 4, Munición: 2
+* Mejoras: Daño (382/386/392), Armadura (8/12/18)
+* Precisión: 100%
+* Rol: Artillería de altísimo daño, muy frágil, munición limitada
+Submarino (Diving Boat):
+* HP: 110, Armadura base: 6, Daño base: 123, Tamaño: 3, Munición: 4
+* Mejoras: Daño (125/129/135), Armadura (8/12/18)
+* Precisión: 100%
+* Rol: Artillería equilibrada, uso táctico contra Lanzallamas
+4.1.5 Unidades Aéreas Marítimas
+Lancha Palas (Paddle Speedboat):
+* HP: 20, Armadura: 0, Daño base: 12, Tamaño: 1, Munición: 5
+* Mejoras: Daño (14/18/24), Armadura (2/6/12)
+* Precisión: 100%
+* Rol: Anti-aérea, muy frágil
+Barco Portaglobos (Balloon Carrier):
+* HP: 140, Armadura: 0, Daño base: 100, Tamaño: 5, Munición: 5
+* Mejoras: Daño (102/106/112), Armadura (2/6/12)
+* Precisión: 100%
+* Rol: Bombardero naval con Immediate Redistribution
+* Especial: IR activa con ≥30 unidades juntas
+4.2 Configuraciones de Campo Marítimo
+Tamaños de Campo según Nivel de Puerto:
+Nivel Puerto
+	Primera Línea
+	Luchadores Dist.
+	Flancos
+	Artillería
+	Bombarderos
+	Anti-aérea
+	0-7
+	3×15
+	3×15
+	0×0
+	1×15
+	1×10
+	1×10
+	8-14
+	5×15
+	5×15
+	2×15
+	2×15
+	1×10
+	1×10
+	15-21
+	7×15
+	7×15
+	4×15
+	3×15
+	1×15
+	1×15
+	22-28
+	7×20
+	7×20
+	6×15
+	4×15
+	2×10
+	2×10
+	29+
+	7×25
+	7×25
+	6×20
+	5×15
+	2×15
+	2×15
+	
+
+________________
+
+
+5. Arquitectura del Sistema
+5.1 Visión General
+Patrón Arquitectónico: Domain-Driven Design (DDD) + Clean Architecture
+Capas del Sistema:
+┌─────────────────────────────────────────┐
+│ Presentation Layer (UI/API) │
+├─────────────────────────────────────────┤
+│ Application Layer (Use Cases) │
+├─────────────────────────────────────────┤
+│ Domain Layer (Business Logic) │
+├─────────────────────────────────────────┤
+│ Infrastructure Layer (Data/Services) │
+└─────────────────────────────────────────┘
+5.2 Módulos del Dominio (ACTUALIZADOS)
+5.2.1 Módulo de Unidades (Units)
+Entidades:
+* Unit: Clase base abstracta para todas las unidades
+* UnitGroup: Agrupa unidades del mismo tipo con misma mejora
+* TerrestrialUnit: Unidades terrestres
+* MaritimeUnit: Unidades marítimas
+* UnitType: Enum con todos los tipos de unidades
+* UnitStats: Value Object con estadísticas (HP, armadura, daño, tamaño, munición, precision)
+Servicios:
+* UnitFactory: Crea instancias de unidades con stats específicos
+* UnitUpgradeService: Aplica mejoras individuales a cada unidad
+* HephaestusService: Calcula bonificaciones globales de Hefesto
+* UnitGroupManager: Gestiona grupos de unidades con diferentes mejoras
+5.2.2 Módulo de Campo de Batalla (Battlefield)
+Entidades:
+* Battlefield: Representa el campo de batalla completo
+* BattleLine: Representa una línea de batalla (primera línea, flancos, etc.)
+* BattleSlot: Representa un slot dentro de una línea
+* BattlefieldConfiguration: Configuración de slots según nivel
+* AttackingMatrix: Matriz n×m de unidades atacantes
+* SlotRenumbering: Orden de renumeración por tipo de línea
+Value Objects:
+* BattleType: Enum (Terrestrial, Maritime)
+* LineType: Enum (FirstLine, Ranged, Flanks, Artillery, Bombers, AntiAir)
+* SlotCapacity: Capacidad de un slot (número de huecos, tamaño por hueco)
+Servicios:
+* BattlefieldFactory: Crea campos de batalla según nivel de ciudad/puerto
+* UnitDistributionService: Distribuye unidades en slots según prioridades
+* SlotFillingAlgorithm: Implementa el algoritmo de llenado de slots
+* AttackingMatrixService: Construye y gestiona matriz de ataque (Am)
+* SlotRenumberingService: Aplica renumeración según tipo de línea
+* BattlefieldAnalyzer: Analiza composición completa del campo
+5.2.3 Módulo de Combate (Combat) - ACTUALIZADO
+Entidades:
+* Battle: Representa una batalla completa
+* BattleRound: Representa una ronda de combate
+* AttackAction: Representa un ataque individual
+* DamageResult: Resultado de un ataque
+* KillType: Enum con tipos de kill (1-kill, D-kill, P-kill, I-kill, IR-kill, M-kill)
+Servicios:
+* CombatEngine: Motor principal de combate
+* DamageCalculator: Calcula daño efectivo con precisión
+* TargetSelector: Selecciona objetivos según prioridades y Am
+* AttackSequencer: Determina el orden de ataque
+* AmmunitionManager: Gestiona la munición de las unidades
+* ReserveRedistributionService: Implementa RR (entre rondas)
+* SlotRedistributionService: Implementa SR (después de línea dispara)
+* ImmediateRedistributionService: Implementa IR (Portaglobos/Espolones)
+* KillTypeResolver: Determina tipo de kill según composición
+* AccuracyFilter: Filtra ataques según precisión de unidades
+Agregados:
+* BattleSimulation: Agregado raíz que coordina toda la simulación
+5.2.4 Módulo de Reportes (Reporting)
+Entidades:
+* BattleReport: Reporte completo de la batalla
+* RoundReport: Reporte de una ronda individual
+* CasualtyReport: Reporte de bajas por bando
+* RedistributionReport: Reporte de redistribuciones (RR, SR, IR)
+Value Objects:
+* BattleStatistics: Estadísticas generales (daño infligido, unidades perdidas, etc.)
+* VictoryCondition: Condición de victoria (eliminación total, retirada, límite de rondas)
+5.3 Diagrama de Clases Principales (ACTUALIZADO)
+┌──────────────────────┐
+│ BattleSimulation │
+├──────────────────────┤
+│ - battlefield │──┐
+│ - combatEngine │ │
+│ - currentRound │ │
+│ - attackingMatrix │ │ (NUEVO)
+├──────────────────────┤ │
+│ + simulate() │ │
+│ + getReport() │ │
+└──────────────────────┘ │
+│
+┌───────────────┴──────────────┐
+│ │
+┌─────────▼──────┐ ┌───────────▼────────┐
+│ Battlefield │ │ CombatEngine │
+├────────────────┤ ├────────────────────┤
+│ - attacker │ │ - damageCalc │
+│ - defender │ │ - targetSel │
+│ - battleLines │ │ - attackSeq │
+│ - composition │ (NUEVO) │ - rrService │ (NUEVO)
+├────────────────┤ │ - srService │ (NUEVO)
+│ + distribute() │ │ - irService │ (NUEVO)
+│ + analyze() │ (NUEVO) │ - killResolver │ (NUEVO)
+└────────────────┘ ├────────────────────┤
+│ │ + executeRound() │
+│ 1:N │ + applyRR() │ (NUEVO)
+│ │ + applySR() │ (NUEVO)
+┌───────▼────────┐ │ + applyIR() │ (NUEVO)
+│ BattleLine │ └────────────────────┘
+├────────────────┤
+│ - lineType │
+│ - slots │
+│ - attackOrder │
+│ - attackPrio │
+│ - renumbering │ (NUEVO)
+│ - attackMatrix │ (NUEVO)
+├────────────────┤
+│ + attack() │
+│ + buildAm() │ (NUEVO)
+└────────────────┘
+│
+│ 1:N
+│
+┌───────▼────────┐
+│ BattleSlot │
+├────────────────┤
+│ - capacity │
+│ - units │
+│ - renumberId │ (NUEVO)
+├────────────────┤
+│ + fillUnits() │
+│ + getAlive() │
+│ + receiveIR() │ (NUEVO)
+└────────────────┘
+│
+│ 1:N
+│
+┌───────▼────────┐
+│ Unit │
+├────────────────┤
+│ - stats │
+│ - currentHP │
+│ - ammunition │
+│ - upgradeLevel │ (NUEVO)
+│ - groupId │ (NUEVO)
+│ - accuracy │ (NUEVO)
+├────────────────┤
+│ + attack() │
+│ + takeDamage() │
+│ + isAlive() │
+│ + canAttack() │ (considera accuracy)
+└────────────────┘
+5.4 Flujo de Datos (ACTUALIZADO)
+Inicialización de Batalla:
+User Input → BattleSimulation.configure()
+→ UnitGroupManager.createGroups() (por tipo + mejora)
+→ BattlefieldFactory.create()
+→ UnitDistributionService.distribute() (grupos individuales)
+→ SlotFillingAlgorithm.fill()
+→ AttackingMatrixService.buildAm() (NUEVO)
+→ SlotRenumberingService.renumber() (NUEVO)
+→ Battlefield configurado
+Ejecución de Ronda (CON REDISTRIBUCIONES):
+BattleSimulation.simulate()
+→ CombatEngine.executeRound()
+→ ReserveRedistributionService.applyRR() (NUEVO - inicio de ronda)
+→ AttackSequencer.getAttackOrder()
+→ Para cada línea en orden:
+→ AttackingMatrixService.getTargetsFromAm() (NUEVO)
+→ AccuracyFilter.filterAttacks() (NUEVO - según precisión)
+→ Para cada unidad atacante (filtrada):
+→ TargetSelector.selectTargetFromAm() (NUEVO)
+→ DamageCalculator.calculate()
+→ ImmediateRedistributionService.checkAndApply() (NUEVO - si aplica)
+→ Unit.takeDamage()
+→ SlotRedistributionService.applySR() (NUEVO - después de línea dispara)
+→ AmmunitionManager.decreaseAmmo()
+→ RemoveDestroyedUnits()
+→ KillTypeResolver.identifyKillType() (NUEVO - para reporte)
+→ BattleReport.addRound()
+→ BattleReport.addRedistributionData() (NUEVO)
+5.5 Tecnologías Recomendadas
+Lenguaje: TypeScript/JavaScript (Node.js) o Python
+Justificación:
+* TypeScript: Tipado estático, excelente para modelar el dominio complejo
+* Python: Simplicidad, librerías científicas para análisis
+Estructura del Proyecto (ACTUALIZADA):
+ikariam-battle-simulator/
+├── src/
+│ ├── domain/
+│ │ ├── units/
+│ │ │ ├── unit.ts
+│ │ │ ├── unit-group.ts (NUEVO)
+│ │ │ ├── unit-stats.ts
+│ │ │ └── unit-types.ts
+│ │ ├── battlefield/
+│ │ │ ├── battlefield.ts
+│ │ │ ├── battle-line.ts
+│ │ │ ├── battle-slot.ts
+│ │ │ ├── attacking-matrix.ts (NUEVO)
+│ │ │ ├── slot-renumbering.ts (NUEVO)
+│ │ │ └── battlefield-analyzer.ts (NUEVO)
+│ │ ├── combat/
+│ │ │ ├── combat-engine.ts
+│ │ │ ├── damage-calculator.ts
+│ │ │ ├── reserve-redistribution.ts (NUEVO)
+│ │ │ ├── slot-redistribution.ts (NUEVO)
+│ │ │ ├── immediate-redistribution.ts (NUEVO)
+│ │ │ ├── kill-type-resolver.ts (NUEVO)
+│ │ │ ├── accuracy-filter.ts (NUEVO)
+│ │ │ └── target-selector.ts
+│ │ └── reporting/
+│ │ ├── battle-report.ts
+│ │ ├── round-report.ts
+│ │ └── redistribution-report.ts (NUEVO)
+│ ├── application/
+│ │ ├── usecases/
+│ │ └── services/
+│ ├── infrastructure/
+│ │ ├── data/
+│ │ └── repositories/
+│ └── presentation/
+│ ├── cli/
+│ └── web/
+├── tests/
+│ ├── unit/
+│ │ ├── attacking-matrix.test.ts (NUEVO)
+│ │ ├── slot-renumbering.test.ts (NUEVO)
+│ │ ├── redistribution.test.ts (NUEVO)
+│ │ ├── kill-types.test.ts (NUEVO)
+│ │ └── accuracy.test.ts (NUEVO)
+│ ├── integration/
+│ └── fixtures/
+├── data/
+│ ├── unidades.json
+│ ├── campos.json
+│ └── lineas.json
+├── docs/
+│ └── academic-study-barbarossa-xanto.pdf
+└── README.md
+________________
+
+
+6. Plan de Implementación por Fases (ACTUALIZADO)
+Fase 0: Configuración del Proyecto
+Sin cambios respecto a v1.0
+Duración estimada: 1 día
+Fase 1: Módulo de Unidades (ACTUALIZADO)
+Objetivo: Implementar el sistema de unidades con mejoras individuales, Hefesto global, y precisión variable.
+Tareas:
+1. Crear clase base Unit con propiedades comunes
+2. Añadir upgradeLevel (0-3) y groupId a Unit
+3. Implementar UnitStats Value Object con campo accuracy
+4. Crear enums UnitType, BattleType
+5. Implementar UnitFactory que carga datos desde unidades.json
+6. Implementar UnitGroupManager para gestionar grupos por tipo+mejora
+7. Implementar UnitUpgradeService para aplicar mejoras individuales (mejora0/1/2/3)
+8. Implementar HephaestusService con tabla completa de bonificaciones (niveles 0-5)
+9. Crear tests unitarios para todas las unidades y sus estadísticas
+Entregables:
+* Clases Unit, UnitGroup, UnitStats, UnitType completamente funcionales
+* Factory que crea instancias correctas desde JSON
+* UnitGroupManager operativo
+* Servicios de mejora individual y Hefesto global operativos
+* Cobertura de tests > 90%
+Duración estimada: 4-5 días (incrementado por grupos y Hefesto completo)
+Fase 2: Módulo de Campo de Batalla (ACTUALIZADO)
+Objetivo: Implementar la estructura del campo de batalla, algoritmo de distribución, y construcción de Attacking Matrix.
+Tareas:
+1. Crear clase BattlefieldConfiguration que carga datos desde campos.json
+2. Implementar clase BattleSlot con capacidad y unidades contenidas + renumberId
+3. Implementar clase BattleLine con tipo, orden de ataque y prioridades + attackMatrix
+4. Implementar clase Battlefield con dos bandos (atacante/defensor)
+5. Implementar SlotFillingAlgorithm según especificación considerando grupos
+6. Cargar prioridades de posición desde lineas.json
+7. Implementar BattlefieldFactory para crear campos según nivel
+8. Implementar AttackingMatrixService para construir matriz n×m
+9. Implementar SlotRenumberingService con órdenes específicos por línea
+10. Implementar BattlefieldAnalyzer para analizar composición completa
+11. Crear tests para distribución de unidades en diferentes escenarios
+Entregables:
+* Campo de batalla completamente modelado con Am y renumeración
+* Algoritmo de distribución funcionando correctamente con grupos
+* AttackingMatrix construida correctamente
+* SlotRenumbering aplicado según tipo de línea
+* Tests para diferentes niveles y composiciones
+Duración estimada: 6-7 días (incrementado por Am y renumeración)
+Fase 3: Sistema de Daño y Combate Básico (ACTUALIZADO)
+Objetivo: Implementar el sistema de cálculo de daño con precisión variable y selección basada en Am.
+Tareas:
+1. Implementar DamageCalculator con fórmula base (daño - armadura)
+2. Implementar AccuracyFilter para filtrar ataques según precisión
+3. Implementar AmmunitionManager para gestión de munición
+4. Implementar método Unit.takeDamage() y Unit.isAlive()
+5. Implementar TargetSelector usando Attacking Matrix y renumeración
+6. Implementar AttackSequencer con orden de ataque (1-6)
+7. Crear clase AttackAction y DamageResult
+8. Implementar lógica de eliminación de unidades destruidas
+9. Crear tests específicos para precisión < 100%
+10. Crear tests de selección basada en Am
+Entregables:
+* Sistema de daño funcional con precisión variable
+* AccuracyFilter operativo
+* TargetSelector usando Am correctamente
+* Tests de combate básico con diferentes precisiones
+Duración estimada: 7-8 días (incrementado por Am integration)
+Fase 4: Motor de Combate y Rondas (ACTUALIZADO)
+Objetivo: Implementar el motor de combate completo con las 3 redistribuciones.
+Tareas:
+1. Implementar clase BattleRound que representa una ronda
+2. Implementar ReserveRedistributionService (RR - entre rondas)
+3. Implementar SlotRedistributionService (SR - después de línea dispara)
+4. Implementar ImmediateRedistributionService (IR - Portaglobos/Espolones)
+5. Implementar CombatEngine.executeRound() con todas las fases + redistribuciones
+6. Implementar secuencia de ataque completa (orden 1-6) con SR después de cada línea
+7. Implementar lógica de verificación de victoria
+8. Implementar límite de rondas máximas
+9. Integrar todos los servicios (daño, objetivos, munición, RR, SR, IR)
+10. Crear tests de integración validando cada tipo de redistribución
+Entregables:
+* Motor de combate funcional con RR, SR, IR
+* RR aplicado correctamente al inicio de ronda
+* SR aplicado después de cada línea dispara
+* IR aplicado para Portaglobos (≥30) y Espolones (≥80)
+* Tests de integración exitosos con redistribuciones
+Duración estimada: 8-9 días (incrementado significativamente)
+Fase 5: Kill Types y Mecánicas Especiales (NUEVA FASE)
+Objetivo: Implementar los 6 tipos de kill y lógica de detección.
+Tareas:
+1. Implementar KillTypeResolver con lógica de detección
+2. Implementar lógica de 1-kill (one-shot)
+3. Implementar lógica de D-kill (direct kill sin desperdicio)
+4. Implementar lógica de I-kill (indirect kill por división)
+5. Implementar lógica de IR-kill (con Immediate Redistribution)
+6. Documentar P-kill y M-kill (casos especiales)
+7. Implementar detección basada en columnas de Am (pares vs impares)
+8. Crear tests específicos para cada tipo de kill
+9. Validar contra casos del estudio académico
+Entregables:
+* KillTypeResolver operativo
+* 6 tipos de kill implementados y diferenciados
+* Tests validando cada tipo
+* Documentación de mecánicas especiales
+Duración estimada: 5-6 días (NUEVA)
+Fase 6: Sistema de Reportes (ACTUALIZADO)
+Objetivo: Implementar generación de reportes detallados con información de redistribuciones y kill types.
+Tareas:
+1. Crear clase BattleReport con estadísticas generales
+2. Crear clase RoundReport con detalles de cada ronda
+3. Crear clase CasualtyReport con bajas por bando y línea
+4. Crear clase RedistributionReport con RR, SR, IR por ronda
+5. Añadir sección de Kill Types en reportes
+6. Implementar recopilación de datos durante la batalla
+7. Implementar formateo de reportes (texto, JSON)
+8. Agregar estadísticas: daño total, unidades perdidas, redistribuciones, etc.
+9. Crear visualización básica de resultados con redistribuciones
+Entregables:
+* Reportes completos de batalla con redistribuciones y kill types
+* Estadísticas detalladas por ronda
+* Formato legible y formato JSON
+* Exportación de reportes
+Duración estimada: 5-6 días (incrementado por nuevas métricas)
+Fase 7: Interfaz Web (ACTUALIZADA - SIN CAMBIOS MAYORES)
+Objetivo: Crear interfaz web completa con estética de Ikariam.
+Requisitos adicionales:
+* Mostrar tipo de kill por ataque en visualización
+* Indicador visual de redistribuciones (RR, SR, IR)
+* Panel de análisis de Attacking Matrix
+* Visualización de slot renumbering
+Duración estimada: 14-18 días (incrementado por visualizaciones avanzadas)
+Fase 8: Optimización y Testing Final (ACTUALIZADO)
+Tareas adicionales:
+1. Validar contra casos del estudio académico de Barbarossa/Xanto
+2. Benchmark de performance con Am complexity
+3. Validar precisión de redistribuciones
+4. Tests de regresión para kill types
+Duración estimada: 6-7 días (incrementado)
+Fase 9: Características Avanzadas (Opcional)
+Sin cambios respecto a v1.0
+Duración estimada: 8-12 días
+Resumen de Duración Total (ACTUALIZADO)
+* Desarrollo Core (Fases 0-6): 35-44 días (~7-9 semanas)
+* Con Interfaz Web (Fase 7): 49-62 días (~10-12.5 semanas)
+* Testing y Optimización (Fase 8): +6-7 días
+* Características Avanzadas (Fase 9): +8-12 días (opcional)
+Total estimado: 11-14 semanas para versión completa con interfaz web, mecánicas avanzadas, y testing exhaustivo.
+________________
+
+
+7. Prompts para Agentes IA
+[Los prompts se actualizan para incluir las mecánicas avanzadas. Solo se muestran los actualizados/nuevos]
+Prompt Fase 1: Módulo de Unidades (ACTUALIZADO - CRÍTICO)
+Eres un ingeniero de software experto en TypeScript y Domain-Driven Design. Tu tarea es implementar el Módulo de Unidades para un simulador de batallas de Ikariam.
+CONTEXTO:
+Ikariam es un juego de estrategia con batallas entre unidades que tienen estadísticas (HP, armadura, daño, tamaño, munición, precisión). Las unidades pueden tener mejoras INDIVIDUALES (mejora0, mejora1, mejora2, mejora3) y bonificaciones de Hefesto GLOBALES (niveles 0-5).
+REQUISITO CRÍTICO 1: MEJORAS INDIVIDUALES
+Las mejoras se aplican INDIVIDUALMENTE a cada unidad, NO globalmente por tipo.
+Ejemplo:
+Un jugador puede tener:
+* 100 espadachines sin mejora (mejora 0)
+* 50 espadachines con mejora 2
+* 30 espadachines con mejora 3
+Estos son 3 GRUPOS DIFERENTES que se gestionan independientemente.
+REQUISITO CRÍTICO 2: HEFESTO GLOBAL
+Hefesto se aplica GLOBALMENTE a todas las unidades del bando.
+Tabla completa:
+* Nivel 0: +0 armadura, +0% daño
+* Nivel 1: +0 armadura, +7.5% daño
+* Nivel 2: +10 armadura, +7.5% daño
+* Nivel 3: +10 armadura, +10% daño
+* Nivel 4: +20 armadura, +12.5% daño
+* Nivel 5: +20 armadura, +15% daño
+REQUISITO CRÍTICO 3: PRECISIÓN VARIABLE
+NO todas las unidades tienen 100% precisión. Algunas unidades (ej: Lancero) tienen precisión 70%.
+REQUISITOS DE IMPLEMENTACIÓN:
+1. Crear una clase abstracta Unit con las siguientes propiedades:
+   * id: string
+   * name: string
+   * type: UnitType (enum)
+   * battleType: BattleType (enum: Terrestrial, Maritime)
+   * lineType: LineType (enum: FirstLine, Ranged, Flanks, Artillery, Bombers, AntiAir)
+   * stats: UnitStats (Value Object)
+   * currentHP: number
+   * currentAmmunition: number | null
+   * upgradeLevel: number (0-3) // Mejora INDIVIDUAL de esta unidad específica
+   * groupId: string // Identificador único: ${type}_upgrade${level}
+2. Crear Value Object UnitStats con propiedades inmutables:
+   * baseHP: number
+   * baseArmor: number
+   * baseDamage: number
+   * accuracy: number // Precisión (0-100)
+   * size: number
+   * ammunition: number | null
+   * upgradeDamage: [number, number, number, number] // mejora0, mejora1, mejora2, mejora3
+   * upgradeArmor: [number, number, number, number]
+3. Implementar método Unit.getEffectiveStats(hephaestusLevel: number):
+getEffectiveStats(hephaestusLevel: number): EffectiveStats {
+const hephaestus = HephaestusService.getBonuses(hephaestusLevel);
+// Armadura: base + mejora individual + hefesto global
+const armor = this.stats.baseArmor
++ this.stats.upgradeArmor[this.upgradeLevel]
++ hephaestus.armor;
+// Daño: (base + mejora individual) × (1 + hefesto%)
+const damage = (this.stats.baseDamage
++ this.stats.upgradeDamage[this.upgradeLevel])
+× (1 + hephaestus.damagePercent);
+return {
+hp: this.stats.baseHP, // HP no se modifica
+armor: armor,
+damage: damage,
+accuracy: this.stats.accuracy,
+size: this.stats.size,
+ammunition: this.stats.ammunition
+};
+}
+4. Implementar HephaestusService con tabla completa:
+class HephaestusService {
+private static readonly BONUSES = {
+0: { armor: 0, damagePercent: 0.00 },
+1: { armor: 0, damagePercent: 0.075 },
+2: { armor: 10, damagePercent: 0.075 },
+3: { armor: 10, damagePercent: 0.10 },
+4: { armor: 20, damagePercent: 0.125 },
+5: { armor: 20, damagePercent: 0.15 }
+};
+static getBonuses(level: number): { armor: number; damagePercent: number } {
+if (level < 0 || level > 5) {
+throw new Error(Invalid Hephaestus level: ${level}. Must be 0-5.);
+}
+return this.BONUSES[level];
+}
+}
+5. Implementar UnitGroupManager para gestionar grupos:
+class UnitGroup {
+unitType: UnitType;
+upgradeLevel: number; // 0-3
+quantity: number;
+units: Unit[];
+getId(): string {
+return ${this.unitType}_upgrade${this.upgradeLevel};
+}
+}
+class UnitGroupManager {
+private groups: Map<string, UnitGroup> = new Map();
+addGroup(unitType: UnitType, upgradeLevel: number, quantity: number): void {
+const groupId = ${unitType}_upgrade${upgradeLevel};
+if (this.groups.has(groupId)) {
+ // Incrementar cantidad si ya existe
+ this.groups.get(groupId)!.quantity += quantity;
+} else {
+ // Crear nuevo grupo
+ this.groups.set(groupId, {
+   unitType,
+   upgradeLevel,
+   quantity,
+   units: []
+ });
+}
+
+}
+instantiateUnits(unitFactory: UnitFactory): void {
+for (const group of this.groups.values()) {
+group.units = [];
+for (let i = 0; i < group.quantity; i++) {
+const unit = unitFactory.create(group.unitType, group.upgradeLevel);
+group.units.push(unit);
+}
+}
+}
+getAllUnits(): Unit[] {
+const allUnits: Unit[] = [];
+for (const group of this.groups.values()) {
+allUnits.push(...group.units);
+}
+return allUnits;
+}
+getGroupsByType(unitType: UnitType): UnitGroup[] {
+return Array.from(this.groups.values())
+.filter(g => g.unitType === unitType);
+}
+}
+6. Implementar UnitFactory.createFromJSON() que:
+   * Carga datos desde unidades.json (adjunto)
+   * Crea instancia correcta según tipo
+   * Asigna upgradeLevel específico
+   * Valida datos requeridos
+class UnitFactory {
+private unitData: Map<UnitType, any> = new Map();
+loadFromJSON(jsonData: any): void {
+// Cargar datos de unidades.json
+for (const unitInfo of jsonData.unit) {
+this.unitData.set(unitInfo['nombre-unidad'] as UnitType, unitInfo);
+}
+}
+create(unitType: UnitType, upgradeLevel: number): Unit {
+const data = this.unitData.get(unitType);
+if (!data) throw new Error(Unit type not found: ${unitType});
+const stats = new UnitStats(
+ data['puntos-golpe'],
+ data['armadura'],
+ data['daño'],
+ data['precision'],
+ data['tamaño'],
+ data['municion'],
+ [
+   data['daño'], // mejora 0 (base)
+   data['daño-mejora1'],
+   data['daño-mejora2'],
+   data['daño-mejora3']
+ ],
+ [
+   data['armadura'], // mejora 0 (base)
+   data['armadura-mejora1'],
+   data['armadura-mejora2'],
+   data['armadura-mejora3']
+ ]
+);
+
+const unit = new ConcreteUnit(unitType, stats, upgradeLevel);
+return unit;
+
+}
+}
+DATOS DE ENTRADA:
+unidades.json:
+{
+"unit": [
+{
+"nombre-unidad": "hoplita",
+"puntos-golpe": 56,
+"armadura": 1,
+"daño": 18,
+"precision": 100,
+"daño-mejora1": 19,
+"daño-mejora2": 21,
+"daño-mejora3": 24,
+"armadura-mejora1": 2,
+"armadura-mejora2": 4,
+"armadura-mejora3": 7,
+"tamaño": 1,
+"municion": null,
+"tipo-batalla": "terrestre",
+"tipo-unidad": "primera-linea"
+},
+{
+"nombre-unidad": "lancero",
+"puntos-golpe": 13,
+"armadura": 0,
+"daño": 4,
+"precision": 70,
+...
+}
+]
+}
+TESTS REQUERIDOS:
+1. Test: Crear unidad desde JSON con stats correctos
+test('Factory creates unit with correct base stats', () => {
+const unit = factory.create('hoplita', 0);
+expect(unit.stats.baseHP).toBe(56);
+expect(unit.stats.baseArmor).toBe(1);
+expect(unit.stats.baseDamage).toBe(18);
+expect(unit.stats.accuracy).toBe(100);
+});
+2. Test: Aplicar mejoras individuales nivel 0, 1, 2, 3
+test('Unit with individual upgrade level 3 has correct damage', () => {
+const unit = factory.create('hoplita', 3);
+const stats = unit.getEffectiveStats(0); // Sin Hefesto
+expect(stats.damage).toBe(24); // daño-mejora3
+expect(stats.armor).toBe(7); // armadura-mejora3
+});
+   3. Test: Aplicar Hefesto global nivel 0-5
+test('Hephaestus level 5 applies +20 armor and +15% damage', () => {
+const unit = factory.create('gigante-vapor', 0);
+const stats = unit.getEffectiveStats(5);
+expect(stats.armor).toBe(3 + 0 + 20); // base + mejora0 + hefesto5
+expect(stats.damage).toBe((42 + 0) * 1.15); // (base + mejora0) × 1.15
+});
+      4. Test: Combinar mejora individual + Hefesto global
+test('Unit with upgrade 3 and Hephaestus 5 combines correctly', () => {
+const unit = factory.create('espadachin', 3);
+const stats = unit.getEffectiveStats(5);
+// Daño: (10 base + 6 mejora3) × 1.15 = 16 × 1.15 = 18.4
+expect(stats.damage).toBe(18.4);
+// Armadura: 0 base + 7 mejora3 + 20 hefesto5 = 27
+expect(stats.armor).toBe(27);
+});
+         5. Test: Crear grupos de misma unidad con diferentes mejoras
+test('UnitGroupManager handles multiple upgrade levels', () => {
+const manager = new UnitGroupManager();
+manager.addGroup('espadachin', 0, 100);
+manager.addGroup('espadachin', 2, 50);
+manager.addGroup('espadachin', 3, 30);
+expect(manager.groups.size).toBe(3);
+expect(manager.groups.get('espadachin_upgrade0')!.quantity).toBe(100);
+expect(manager.groups.get('espadachin_upgrade2')!.quantity).toBe(50);
+expect(manager.groups.get('espadachin_upgrade3')!.quantity).toBe(30);
+});
+            6. Test: Verificar que grupos se gestionan independientemente
+test('Groups with different upgrades have independent stats', () => {
+const manager = new UnitGroupManager();
+manager.addGroup('hoplita', 0, 10);
+manager.addGroup('hoplita', 3, 10);
+manager.instantiateUnits(factory);
+const allUnits = manager.getAllUnits();
+const upgrade0Units = allUnits.filter(u => u.upgradeLevel === 0);
+const upgrade3Units = allUnits.filter(u => u.upgradeLevel === 3);
+expect(upgrade0Units[0].getEffectiveStats(0).damage).toBe(18);
+expect(upgrade3Units[0].getEffectiveStats(0).damage).toBe(24);
+});
+               7. Test: Precisión variable
+test('Unit with 70% accuracy is loaded correctly', () => {
+const unit = factory.create('lancero', 0);
+expect(unit.stats.accuracy).toBe(70);
+});
+               8. Test: takeDamage() reduce HP correctamente
+               9. Test: Unit muere cuando HP <= 0
+               10. Test: Munición se consume correctamente
+               11. Test: canAttack() retorna false cuando munición = 0
+ARQUITECTURA:
+                  * Seguir principios SOLID
+                  * Inmutabilidad donde sea posible
+                  * Separación clara de responsabilidades
+                  * Inyección de dependencias
+ENTREGA:
+                  * Código TypeScript con tipos estrictos
+                  * Tests con Jest o Mocha (cobertura > 90%)
+                  * Comentarios para lógica compleja
+                  * README con ejemplos de uso de grupos con mejoras mixtas
+Prompt Fase 2: Attacking Matrix y Slot Renumbering (NUEVO - CRÍTICO)
+Eres un ingeniero de software experto. Implementa el sistema de Attacking Matrix (Am) y Slot Renumbering para el simulador de Ikariam, basándote en el estudio académico de AT Barbarossa y Xanto.
+CONTEXTO:
+El sistema de combate de Ikariam NO distribuye ataques "unidad por unidad" de forma secuencial. En su lugar:
+                  1. Cada línea forma una matriz de ataque (Am) de dimensiones n × m
+                  2. Los slots se atacan en un orden renumerado específico por tipo de línea
+                  3. La fila i de la matriz ataca el slot j donde j ≡ i (mod m)
+REQUISITO CRÍTICO 1: ATTACKING MATRIX (Am)
+Definición:
+                  * n = número máximo de unidades por slot (ej: 30, 40, 50 según nivel)
+                  * m = número de slots de la línea (ej: 7 slots para primera línea nivel 25+)
+Ejemplo:
+35 Steam Rams distribuidos en 7 slots × 5 unidades/slot = matriz 5×7
+ Slot1  Slot2  Slot3  Slot4  Slot5  Slot6  Slot7
+
+F1 [ 5 5 5 5 5 5 5 ]
+F2 [ - - - - - - - ]
+F3 [ - - - - - - - ]
+F4 [ - - - - - - - ]
+F5 [ - - - - - - - ]
+Distribución de ataques:
+Fila 1: 1 mod 7 = 1 → ataca Slot 1
+Fila 2: 2 mod 7 = 2 → ataca Slot 2
+Fila 3: 3 mod 7 = 3 → ataca Slot 3
+Fila 4: 4 mod 7 = 4 → ataca Slot 4
+Fila 5: 5 mod 7 = 5 → ataca Slot 5
+REQUISITO CRÍTICO 2: SLOT RENUMBERING
+Los slots NO se atacan en orden físico [1,2,3,4,5,6,7]. Cada tipo de línea tiene un orden específico:
+Primera Línea y Segunda Línea:
+Orden de daño (renumbering): [6, 4, 2, 1, 3, 5, 7]
+Interpretación:
+                  * Slot físico 1 es renumerado como "1" → recibe MÁS ataques
+                  * Slot físico 2 es renumerado como "2" → recibe segundo nivel de ataques
+                  * Slot físico 3 es renumerado como "3"
+                  * Slot físico 4 es renumerado como "4"
+                  * Slot físico 5 es renumerado como "5"
+                  * Slot físico 6 es renumerado como "6"
+                  * Slot físico 7 es renumerado como "7" → recibe MENOS ataques
+Tercera Línea (Artillería):
+Orden de daño: [5, 3, 1, 2, 4]
+Flancos:
+Orden de daño: [6, 4, 2, 1, 3, 5]
+Bombarderos:
+Orden de daño: [1, 2]
+Anti-Aérea:
+Orden de daño: [2, 1]
+IMPLEMENTACIÓN:
+                  1. Implementar clase AttackingMatrix:
+class AttackingMatrix {
+private matrix: Unit[][]; // matriz n×m
+private n: number; // filas (unidades por slot)
+private m: number; // columnas (número de slots)
+constructor(battleLine: BattleLine) {
+this.m = battleLine.slots.length;
+this.n = battleLine.getMaxUnitsPerSlot();
+this.buildMatrix(battleLine);
+}
+private buildMatrix(battleLine: BattleLine): void {
+this.matrix = [];
+for (let row = 0; row < this.n; row++) {
+ this.matrix[row] = [];
+ 
+ for (let col = 0; col < this.m; col++) {
+   const slot = battleLine.slots[col];
+   const units = slot.getAliveUnits();
+   
+   // Asignar unidad en posición (row, col) si existe
+   if (row < units.length) {
+     this.matrix[row][col] = units[row];
+   } else {
+     this.matrix[row][col] = null;  // Slot incompleto
+   }
+ }
+}
+
+}
+getTargetSlotForRow(row: number): number {
+// Fila i ataca slot j donde j ≡ i (mod m)
+return (row + 1) % this.m || this.m; // 1-indexed
+}
+getAttackersForSlot(targetSlotIndex: number, renumbering: number[]): Unit[] {
+const attackers: Unit[] = [];
+// Encontrar qué filas atacan este slot según renumeración
+const renumberedIndex = renumbering.indexOf(targetSlotIndex + 1);  // 1-indexed
+
+for (let row = 0; row < this.n; row++) {
+ const targetSlot = this.getTargetSlotForRow(row);
+ 
+ if (targetSlot === renumberedIndex + 1) {
+   for (let col = 0; col < this.m; col++) {
+     if (this.matrix[row][col] !== null) {
+       attackers.push(this.matrix[row][col]!);
+     }
+   }
+ }
+}
+
+return attackers;
+
+}
+isComplete(): boolean {
+// Verificar si todos los slots están llenos
+for (let row = 0; row < this.n; row++) {
+for (let col = 0; col < this.m; col++) {
+if (this.matrix[row][col] === null) return false;
+}
+}
+return true;
+}
+getDimensions(): { rows: number; cols: number } {
+return { rows: this.n, cols: this.m };
+}
+}
+                  2. Implementar SlotRenumberingService:
+class SlotRenumberingService {
+private static readonly RENUMBERING_ORDERS = {
+'primera-linea': [6, 4, 2, 1, 3, 5, 7],
+'luchadores-distancia': [6, 4, 2, 1, 3, 5, 7],
+'artilleria': [5, 3, 1, 2, 4],
+'flancos': [6, 4, 2, 1, 3, 5],
+'bombarderos': [1, 2],
+'anti-aerea': [2, 1]
+};
+static getRenumberingOrder(lineType: LineType): number[] {
+const order = this.RENUMBERING_ORDERS[lineType];
+if (!order) {
+throw new Error(No renumbering order defined for ${lineType});
+}
+return order;
+}
+static applyRenumbering(slots: BattleSlot[], lineType: LineType): void {
+const order = this.getRenumberingOrder(lineType);
+for (let i = 0; i < slots.length; i++) {
+ // Asignar ID renumerado según orden
+ slots[i].renumberId = order[i] || (i + 1);
+}
+
+}
+static getPhysicalSlotIndex(renumberId: number, lineType: LineType): number {
+const order = this.getRenumberingOrder(lineType);
+return order.indexOf(renumberId);
+}
+}
+                  3. Integrar en BattleLine:
+class BattleLine {
+// ... propiedades existentes ...
+private attackingMatrix: AttackingMatrix;
+private renumberingOrder: number[];
+constructor(lineType: LineType, slots: BattleSlot[]) {
+this.lineType = lineType;
+this.slots = slots;
+// Aplicar renumeración a los slots
+SlotRenumberingService.applyRenumbering(this.slots, lineType);
+this.renumberingOrder = SlotRenumberingService.getRenumberingOrder(lineType);
+
+// Construir matriz de ataque
+this.attackingMatrix = new AttackingMatrix(this);
+
+}
+getAttackersForSlot(targetSlotIndex: number): Unit[] {
+return this.attackingMatrix.getAttackersForSlot(
+targetSlotIndex,
+this.renumberingOrder
+);
+}
+rebuildAttackingMatrix(): void {
+// Reconstruir matriz después de bajas
+this.attackingMatrix = new AttackingMatrix(this);
+}
+}
+                  4. Implementar BattlefieldAnalyzer:
+class BattlefieldAnalyzer {
+analyzeComposition(battlefield: Battlefield): CompositionAnalysis {
+const analysis = {
+hasSecondLine: false,
+incompleteSlots: [],
+matrixDimensions: new Map<LineType, { n: number; m: number }>()
+};
+for (const [lineType, line] of battlefield.getAllLines()) {
+ if (lineType === 'luchadores-distancia' && line.hasAliveUnits()) {
+   analysis.hasSecondLine = true;
+ }
+ 
+ const matrix = line.attackingMatrix;
+ analysis.matrixDimensions.set(lineType, matrix.getDimensions());
+ 
+ if (!matrix.isComplete()) {
+   analysis.incompleteSlots.push(lineType);
+ }
+}
+
+return analysis;
+
+}
+calculateExpectedDamageDistribution(
+attackerLine: BattleLine,
+defenderLine: BattleLine
+): Map<number, number> {
+const distribution = new Map<number, number>();
+const renumbering = SlotRenumberingService.getRenumberingOrder(defenderLine.lineType);
+for (let i = 0; i < defenderLine.slots.length; i++) {
+ const attackers = attackerLine.getAttackersForSlot(i);
+ const totalDamage = attackers.reduce((sum, u) => sum + u.getEffectiveDamage(), 0);
+ distribution.set(i, totalDamage);
+}
+
+return distribution;
+
+}
+}
+TESTS REQUERIDOS:
+                  1. Test: Matriz 5×7 se construye correctamente
+test('AttackingMatrix builds 5x7 matrix correctly', () => {
+// 35 Steam Rams en 7 slots
+const line = createBattleLineWithUnits('primera-linea', 35, 7);
+const matrix = new AttackingMatrix(line);
+expect(matrix.getDimensions()).toEqual({ rows: 5, cols: 7 });
+});
+                     2. Test: Fila i ataca slot j según módulo
+test('Row targets correct slot via modulo', () => {
+const matrix = new AttackingMatrix(line7slots);
+expect(matrix.getTargetSlotForRow(0)).toBe(1); // 1 mod 7 = 1
+expect(matrix.getTargetSlotForRow(1)).toBe(2); // 2 mod 7 = 2
+expect(matrix.getTargetSlotForRow(6)).toBe(7); // 7 mod 7 = 0 → 7
+expect(matrix.getTargetSlotForRow(7)).toBe(1); // 8 mod 7 = 1
+});
+                        3. Test: Renumeración de primera línea es correcta
+test('First line renumbering order is [6,4,2,1,3,5,7]', () => {
+const order = SlotRenumberingService.getRenumberingOrder('primera-linea');
+expect(order).toEqual([6, 4, 2, 1, 3, 5, 7]);
+});
+                        4. Test: Slot físico 1 recibe más ataques que slot físico 7
+test('Physical slot 1 receives more attacks than slot 7', () => {
+const attackerLine = createFullBattleLine(7, 50); // 7 slots, 50 unidades c/u
+const defenderLine = createFullBattleLine(7, 50);
+const analyzer = new BattlefieldAnalyzer();
+const distribution = analyzer.calculateExpectedDamageDistribution(
+attackerLine,
+defenderLine
+);
+expect(distribution.get(0)!).toBeGreaterThan(distribution.get(6)!);
+});
+                           5. Test: Matriz incompleta se detecta correctamente
+test('Incomplete matrix is detected', () => {
+const line = createBattleLineWithUnits('primera-linea', 20, 7); // Solo 20 de 50
+const matrix = new AttackingMatrix(line);
+expect(matrix.isComplete()).toBe(false);
+});
+                              6. Test: Renumeración de artillería difiere de primera línea
+test('Artillery renumbering differs from first line', () => {
+const firstLineOrder = SlotRenumberingService.getRenumberingOrder('primera-linea');
+const artilleryOrder = SlotRenumberingService.getRenumberingOrder('artilleria');
+expect(artilleryOrder).toEqual([5, 3, 1, 2, 4]);
+expect(artilleryOrder).not.toEqual(firstLineOrder);
+});
+                                 7. Test: BattlefieldAnalyzer detecta ausencia de segunda línea
+test('Analyzer detects missing second line', () => {
+const battlefield = createBattlefield({
+attacker: { primeraLinea: 100 }, // Sin luchadores-distancia
+defender: { primeraLinea: 100, luchadoresDistancia: 50 }
+});
+const analyzer = new BattlefieldAnalyzer();
+const analysis = analyzer.analyzeComposition(battlefield);
+expect(analysis.hasSecondLine).toBe(false);
+});
+ARQUITECTURA:
+                                    * Strategy pattern para diferentes órdenes de renumeración
+                                    * Builder pattern para construcción de matriz
+                                    * Observer pattern para reconstrucción tras bajas
+ENTREGA:
+                                    * Código TypeScript con tipos estrictos
+                                    * Tests completos (cobertura > 90%)
+                                    * Documentación de fórmulas matemáticas
+                                    * Diagrama de flujo de construcción de Am
+Prompt Fase 4: Damage Redistribution (NUEVO - CRÍTICO)
+Eres un ingeniero experto. Implementa los 3 tipos de Damage Redistribution basándote en el estudio académico de AT Barbarossa y Xanto.
+CONTEXTO:
+El sistema de combate de Ikariam aplica 3 tipos diferentes de redistribución de daño en momentos específicos:
+                                    1. Reserve-Redistribution (RR): Al inicio de cada ronda
+                                    2. Slot-Redistribution (SR): Después que una línea dispara
+                                    3. Immediate-Redistribution (IR): Durante ataque (Portaglobos/Espolones)
+REQUISITO CRÍTICO 1: RESERVE-REDISTRIBUTION (RR)
+Cuándo: Al inicio de cada ronda, antes de cualquier ataque.
+Mecánica:
+damage_per_slot = (total_damage / total_units_alive) × units_in_slot
+El daño total acumulado se redistribuye entre TODAS las unidades vivas (incluyendo reserva).
+Implementación:
+class ReserveRedistributionService {
+applyRR(battlefield: Battlefield, side: 'attacker' | 'defender'): void {
+const lines = battlefield.getLines(side);
+let totalDamageAccumulated = 0;
+let totalUnitsAlive = 0;
+// Paso 1: Calcular daño total y unidades totales
+for (const line of lines.values()) {
+ for (const slot of line.slots) {
+   for (const unit of slot.getAliveUnits()) {
+     totalDamageAccumulated += (unit.stats.baseHP - unit.currentHP);
+     totalUnitsAlive++;
+   }
+ }
+}
+
+if (totalUnitsAlive === 0) return;
+
+// Paso 2: Redistribuir daño equitativamente
+const damagePerUnit = totalDamageAccumulated / totalUnitsAlive;
+
+for (const line of lines.values()) {
+ for (const slot of line.slots) {
+   for (const unit of slot.getAliveUnits()) {
+     // Resetear HP y aplicar daño redistribuido
+     unit.currentHP = unit.stats.baseHP - damagePerUnit;
+   }
+ }
+}
+
+}
+}
+REQUISITO CRÍTICO 2: SLOT-REDISTRIBUTION (SR)
+Cuándo: Después que una línea dispara, antes de la siguiente línea.
+Mecánica:
+El daño se redistribuye dentro de cada slot del objetivo.
+Implementación:
+class SlotRedistributionService {
+applySR(targetLine: BattleLine): void {
+for (const slot of targetLine.slots) {
+const aliveUnits = slot.getAliveUnits();
+if (aliveUnits.length === 0) continue;
+  // Calcular daño total en el slot
+ let totalDamageInSlot = 0;
+ for (const unit of aliveUnits) {
+   totalDamageInSlot += (unit.stats.baseHP - unit.currentHP);
+ }
+ 
+ // Redistribuir daño equitativamente dentro del slot
+ const damagePerUnit = totalDamageInSlot / aliveUnits.length;
+ 
+ for (const unit of aliveUnits) {
+   unit.currentHP = unit.stats.baseHP - damagePerUnit;
+ }
+}
+
+}
+}
+REQUISITO CRÍTICO 3: IMMEDIATE-REDISTRIBUTION (IR)
+Cuándo: Durante el ataque (inmediatamente al recibir daño).
+Unidades especiales:
+                                    * Portaglobos: Umbral ≥30 unidades
+                                    * Espolones a Vapor: Umbral ≥80 unidades
+Mecánica:
+Cuando un slot tiene ≥umbral unidades del tipo especial:
+Ataque 1 (daño D1) → IR divide D1 entre todas las unidades
+Ataque 2 (daño D2) → IR divide D2 entre todas las unidades
+...
+Implementación:
+class ImmediateRedistributionService {
+private static readonly IR_UNITS = {
+'barco-portaglobos': { threshold: 30 },
+'barco-espolon-vapor': { threshold: 80 }
+};
+shouldApplyIR(units: Unit[]): boolean {
+if (units.length === 0) return false;
+// Verificar si todas son del mismo tipo
+const firstType = units[0].type;
+if (!units.every(u => u.type === firstType)) return false;
+
+// Verificar si es tipo especial
+const config = this.IR_UNITS[firstType];
+if (!config) return false;
+
+// Verificar umbral
+return units.length >= config.threshold;
+
+}
+applyIR(slot: BattleSlot, incomingDamage: number): Unit[] {
+const aliveUnits = slot.getAliveUnits();
+if (!this.shouldApplyIR(aliveUnits)) {
+ // Sin IR: aplicar daño normal a primera unidad
+ return this.applyNormalDamage(slot, incomingDamage);
+}
+
+// Con IR: dividir daño entre todas
+const damagePerUnit = incomingDamage / aliveUnits.length;
+const casualties: Unit[] = [];
+
+for (const unit of aliveUnits) {
+ unit.currentHP -= damagePerUnit;
+ 
+ if (unit.currentHP <= 0) {
+   casualties.push(unit);
+   slot.removeUnit(unit);
+ }
+}
+
+return casualties;
+
+}
+private applyNormalDamage(slot: BattleSlot, damage: number): Unit[] {
+const target = slot.getFirstAliveUnit();
+if (!target) return [];
+target.currentHP -= damage;
+
+if (target.currentHP <= 0) {
+ slot.removeUnit(target);
+ return [target];
+}
+
+return [];
+
+}
+}
+Integración en CombatEngine:
+class CombatEngine {
+private rrService: ReserveRedistributionService;
+private srService: SlotRedistributionService;
+private irService: ImmediateRedistributionService;
+executeRound(battlefield: Battlefield): BattleRound {
+const round = new BattleRound(this.currentRound);
+// FASE 1: Reserve-Redistribution al inicio de ronda
+this.rrService.applyRR(battlefield, 'attacker');
+this.rrService.applyRR(battlefield, 'defender');
+
+// FASE 2: Obtener orden de ataque
+const attackOrder = this.attackSequencer.getAttackOrder();
+
+// FASE 3: Ejecutar ataques por línea en orden
+for (const lineType of attackOrder) {
+ // Atacante ataca a defensor
+ const attackerLine = battlefield.getLine('attacker', lineType);
+ const defenderLine = battlefield.getLine('defender', lineType);
+ 
+ for (const unit of attackerLine.getAllAliveUnits()) {
+   if (!this.ammunitionManager.canAttack(unit)) continue;
+   
+   const targetSlot = this.targetSelector.selectTargetSlot(defenderLine);
+   if (!targetSlot) continue;
+   
+   const damage = this.damageCalculator.calculate(unit, targetSlot.getFirstAliveUnit());
+   
+   // Aplicar IR si corresponde
+   const casualties = this.irService.applyIR(targetSlot, damage);
+   
+   round.addAction(new AttackAction(unit, casualties, damage));
+   this.ammunitionManager.consumeAmmunition(unit);
+ }
+ 
+ // FASE 4: Slot-Redistribution después de línea dispara
+ this.srService.applySR(defenderLine);
+ 
+ // Defensor ataca a atacante (mismo flujo)
+ // ...
+}
+
+// FASE 5: Remover unidades muertas y actualizar reserva
+battlefield.removeDeadUnits();
+battlefield.moveOutOfAmmoUnitsToReserve();
+
+return round;
+
+}
+}
+TESTS REQUERIDOS:
+                                    1. Test: RR redistribuye daño al inicio de ronda
+test('RR redistributes damage among all units at round start', () => {
+const battlefield = createBattlefield({
+attacker: { hoplitas: 100 } // 100 hoplitas con HP 56 c/u
+});
+// Simular daño acumulado: 50 hoplitas con 20 HP, 50 con 56 HP
+for (let i = 0; i < 50; i++) {
+battlefield.getLine('attacker', 'primera-linea').slots[0].units[i].currentHP = 20;
+}
+const rrService = new ReserveRedistributionService();
+rrService.applyRR(battlefield, 'attacker');
+// Daño total: 50 × (56-20) = 1800
+// Daño por unidad: 1800 / 100 = 18
+// HP esperado: 56 - 18 = 38
+for (const unit of battlefield.getAllUnits('attacker')) {
+expect(unit.currentHP).toBe(38);
+}
+});
+                                       2. Test: SR redistribuye daño dentro de cada slot
+test('SR redistributes damage within each slot', () => {
+const line = createBattleLine({
+slot1: [{ hp: 20 }, { hp: 56 }, { hp: 40 }] // 3 hoplitas
+});
+const srService = new SlotRedistributionService();
+srService.applySR(line);
+// Daño total en slot: (56-20) + (56-56) + (56-40) = 36 + 0 + 16 = 52
+// Daño por unidad: 52 / 3 = 17.33
+// HP esperado: 56 - 17.33 = 38.67
+for (const unit of line.slots[0].getAliveUnits()) {
+expect(unit.currentHP).toBeCloseTo(38.67, 2);
+}
+});
+                                          3. Test: IR se activa con ≥30 Portaglobos
+test('IR activates with 30+ Balloon Carriers', () => {
+const slot = createSlot({ portaglobos: 36 });
+const irService = new ImmediateRedistributionService();
+expect(irService.shouldApplyIR(slot.getAliveUnits())).toBe(true);
+});
+                                             4. Test: IR NO se activa con <30 Portaglobos
+test('IR does not activate with <30 Balloon Carriers', () => {
+const slot = createSlot({ portaglobos: 25 });
+const irService = new ImmediateRedistributionService();
+expect(irService.shouldApplyIR(slot.getAliveUnits())).toBe(false);
+});
+                                                5. Test: IR divide daño entre todas las unidades
+test('IR divides damage among all units', () => {
+const slot = createSlot({ portaglobos: 36 }); // HP 140 c/u
+const irService = new ImmediateRedistributionService();
+const casualties = irService.applyIR(slot, 360); // 360 daño total
+// Daño por unidad: 360 / 36 = 10
+// HP esperado: 140 - 10 = 130
+expect(casualties.length).toBe(0); // Ninguno muere
+for (const unit of slot.getAliveUnits()) {
+expect(unit.currentHP).toBe(130);
+}
+});
+                                                   6. Test: IR sin activar mata primera unidad
+test('Without IR, only first unit receives damage', () => {
+const slot = createSlot({ portaglobos: 20 }); // <30, sin IR
+const irService = new ImmediateRedistributionService();
+const casualties = irService.applyIR(slot, 200); // 200 daño
+expect(casualties.length).toBe(1); // Primera unidad muere
+expect(slot.getAliveUnits().length).toBe(19); // 19 supervivientes
+});
+                                                      7. Test: Ejemplo del estudio - 2 Rocket Ships vs 5 Steam Rams
+test('Academic study example: 2 Rockets vs 5 Rams with IR', () => {
+const slot = createSlot({ espolonesVapor: 5 }); // <80, sin IR
+const irService = new ImmediateRedistributionService();
+// Sin IR: primera unidad recibe todo
+let casualties = irService.applyIR(slot, 439); // Rocket 1
+expect(casualties.length).toBe(0); // Ram sobrevive (576 HP > 439)
+casualties = irService.applyIR(slot, 439); // Rocket 2
+expect(casualties.length).toBe(1); // Ram 1 muere
+// Ahora con 100 Rams (IR activo):
+const slotWithIR = createSlot({ espolonesVapor: 100 });
+casualties = irService.applyIR(slotWithIR, 439); // Divide entre 100
+expect(casualties.length).toBe(0); // 4.39 daño c/u, nadie muere
+casualties = irService.applyIR(slotWithIR, 439); // Segundo ataque
+expect(casualties.length).toBe(0); // 8.78 daño c/u total, nadie muere
+});
+ARQUITECTURA:
+                                                         * Strategy pattern para diferentes tipos de redistribución
+                                                         * Command pattern para registrar redistribuciones en reporte
+                                                         * Template Method para flujo de ronda con redistribuciones
+ENTREGA:
+                                                         * Código TypeScript con tipos estrictos
+                                                         * Tests completos validando cada tipo de redistribución
+                                                         * Documentación de fórmulas
+                                                         * Diagrama de flujo de ronda con RR, SR, IR
+________________
+
+
+[Continúa con prompts actualizados para fases 5-8...]
+________________
+
+
+8. Criterios de Aceptación y QA
+[Similar estructura a v1.0, con criterios adicionales para mecánicas avanzadas]
+8.1 Criterios Generales de Calidad
+Sin cambios respecto a v1.0
+8.2 Criterios de Aceptación por Fase (ACTUALIZADOS)
+Fase 1: Módulo de Unidades (ACTUALIZADO)
+Criterios Adicionales:
+                                                         9. AC-1.9: UnitGroupManager gestiona grupos con diferentes mejoras
+                                                         * Verificación: 3 grupos de espadachines (mejora 0, 2, 3) se gestionan independientemente
+                                                         * Test: test_unit_group_manager_multiple_upgrades()
+                                                         10. AC-1.10: Hefesto nivel 0-5 aplica bonificaciones correctas
+                                                         * Verificación: Nivel 3 aplica +10 armadura y +10% daño
+                                                         * Test: test_hephaestus_all_levels()
+                                                         11. AC-1.11: Precisión < 100% se carga correctamente
+                                                         * Verificación: Lancero tiene precisión 70%
+                                                         * Test: test_accuracy_loading()
+Fase 2: Campo de Batalla (ACTUALIZADO)
+Criterios Adicionales:
+                                                         7. AC-2.7: Attacking Matrix se construye correctamente
+                                                         * Verificación: Matriz 5×7 con 35 Steam Rams
+                                                         * Test: test_attacking_matrix_construction()
+                                                         8. AC-2.8: Slot Renumbering aplica orden correcto por tipo de línea
+                                                         * Verificación: Primera línea usa [6,4,2,1,3,5,7]
+                                                         * Test: test_slot_renumbering_by_line_type()
+                                                         9. AC-2.9: BattlefieldAnalyzer detecta composición completa
+                                                         * Verificación: Detecta ausencia de segunda línea
+                                                         * Test: test_battlefield_analyzer_composition()
+Fase 3: Sistema de Daño (ACTUALIZADO)
+Criterios Adicionales:
+                                                         9. AC-3.9: AccuracyFilter filtra ataques según precisión
+                                                         * Verificación: 12 Lanceros (70%) → solo 8 atacan
+                                                         * Test: test_accuracy_filter()
+                                                         10. AC-3.10: TargetSelector usa Attacking Matrix
+                                                         * Verificación: Fila i ataca slot j según j ≡ i (mod m)
+                                                         * Test: test_target_selection_from_am()
+Fase 4: Motor de Combate (ACTUALIZADO)
+Criterios Adicionales:
+                                                         9. AC-4.9: Reserve-Redistribution se aplica al inicio de ronda
+                                                         * Verificación: Daño se redistribuye equitativamente entre todas las unidades
+                                                         * Test: test_rr_at_round_start()
+                                                         10. AC-4.10: Slot-Redistribution se aplica después de línea dispara
+                                                         * Verificación: Daño se redistribuye dentro de cada slot
+                                                         * Test: test_sr_after_line_fires()
+                                                         11. AC-4.11: Immediate-Redistribution se aplica para Portaglobos ≥30
+                                                         * Verificación: 36 Portaglobos dividen daño entre todos
+                                                         * Test: test_ir_balloon_carriers()
+                                                         12. AC-4.12: Immediate-Redistribution se aplica para Espolones ≥80
+                                                         * Verificación: 100 Espolones dividen daño entre todos
+                                                         * Test: test_ir_steam_rams()
+Fase 5: Kill Types (NUEVA FASE)
+Criterios de Aceptación:
+                                                         1. AC-5.1: KillTypeResolver identifica 1-kill correctamente
+                                                         * Verificación: 1 Ram mata 1 Hoplita
+                                                         * Test: test_one_shot_kill_detection()
+                                                         2. AC-5.2: KillTypeResolver identifica D-kill
+                                                         * Verificación: Múltiples unidades sin daño desperdiciado
+                                                         * Test: test_direct_kill_detection()
+                                                         3. AC-5.3: KillTypeResolver identifica I-kill
+                                                         * Verificación: Kills = floor(daño_total / HP_objetivo)
+                                                         * Test: test_indirect_kill_detection()
+                                                         4. AC-5.4: KillTypeResolver identifica IR-kill
+                                                         * Verificación: Kill con Immediate Redistribution activa
+                                                         * Test: test_ir_kill_detection()
+                                                         5. AC-5.5: Columnas pares vs impares afectan tipo de kill
+                                                         * Verificación: Matriz con columnas pares tiende a D-kill
+                                                         * Test: test_column_parity_effect()
+                                                         6. AC-5.6: Validación contra casos del estudio académico
+                                                         * Verificación: Reproducir ejemplos de Barbarossa/Xanto
+                                                         * Test: test_academic_study_cases()
+Fase 6: Sistema de Reportes (ACTUALIZADO)
+Criterios Adicionales:
+                                                         9. AC-6.9: RedistributionReport incluye RR, SR, IR
+                                                         * Verificación: Reporte muestra redistribuciones por ronda
+                                                         * Test: test_redistribution_report()
+                                                         10. AC-6.10: Reporte incluye Kill Types por ataque
+                                                         * Verificación: Cada ataque tiene tipo de kill identificado
+                                                         * Test: test_kill_types_in_report()
+8.3 Checklist de QA Final (ACTUALIZADO)
+Antes de considerar el proyecto completo, verificar:
+Funcionalidad:
+                                                         * [ ] Todas las unidades de unidades.json funcionan correctamente
+                                                         * [ ] Todos los niveles de campos.json generan campos correctos
+                                                         * [ ] Todas las prioridades de lineas.json se aplican
+                                                         * [ ] Attacking Matrix se construye correctamente
+                                                         * [ ] Slot Renumbering se aplica según tipo de línea
+                                                         * [ ] Reserve-Redistribution funciona al inicio de ronda
+                                                         * [ ] Slot-Redistribution funciona después de línea dispara
+                                                         * [ ] Immediate-Redistribution funciona para Portaglobos (≥30) y Espolones (≥80)
+                                                         * [ ] 6 tipos de kill se identifican correctamente
+                                                         * [ ] Precisión < 100% filtra ataques correctamente
+                                                         * [ ] Mejoras individuales y Hefesto global se combinan correctamente
+                                                         * [ ] Sistema de munición funciona correctamente
+                                                         * [ ] Orden de ataque (1-6) se respeta
+                                                         * [ ] Prioridades de objetivo se respetan
+                                                         * [ ] Condiciones de victoria funcionan
+                                                         * [ ] Reportes se generan correctamente
+Calidad:
+                                                         * [ ] Cobertura de tests > 85%
+                                                         * [ ] Sin errores de lint
+                                                         * [ ] Sin warnings de TypeScript
+                                                         * [ ] Sin memory leaks detectados
+                                                         * [ ] Rendimiento cumple objetivos
+                                                         * [ ] Documentación completa
+                                                         * [ ] README con ejemplos claros
+                                                         * [ ] CI/CD pipeline pasando
+Validación con Fuentes:
+                                                         * [ ] Casos del estudio académico de Barbarossa/Xanto se reproducen correctamente
+                                                         * [ ] 36 Portaglobos con IR sobreviven más rondas que sin IR
+                                                         * [ ] 100 Espolones a Vapor con IR son más resistentes
+                                                         * [ ] Fórmula de daño coincide con mecánicas de Ikariam
+                                                         * [ ] Distribución de unidades coincide con juego
+                                                         * [ ] Orden de ataque coincide con comportamiento observado
+                                                         * [ ] Slot físico 1 recibe más daño que slot físico 7
+Experiencia de Usuario:
+                                                         * [ ] Interfaz muestra Attacking Matrix
+                                                         * [ ] Interfaz muestra redistribuciones (RR, SR, IR)
+                                                         * [ ] Interfaz muestra Kill Types por ataque
+                                                         * [ ] Mensajes de error son claros
+                                                         * [ ] Reportes son legibles e incluyen mecánicas avanzadas
+                                                         * [ ] Ejemplos de uso funcionan
+                                                         * [ ] Instalación es simple
+________________
+
+
+Referencias
+[1] AT Barbarossa & Xanto - Academic Study on Ikariam Battle Mechanics. Retrieved from internal PDF document.
+[2] Ikariam Forum - Battle System Math. Retrieved from https://forum.ikariam.gameforge.com/forum/thread/100738-battle-system-math-number-of-units-to-survive-round-1/
+[3] Guía Flotero Maestro de Batallas por Fur1on. Retrieved from https://forum.ikariam.gameforge.com/forum/thread/64709-guia-flotero-maestro-de-batallas-por-fur1on/
+[4] Ikariam Kings - Art of Warfare. Retrieved from https://ikariamkings101.weebly.com/art-of-warfare.html
+[5] YouTube - Ikariam Land Battles Part 1. Retrieved from https://www.youtube.com/watch?v=vuEjm5_3Khk
+[6] Ikariam Kings - Military Units. Retrieved from https://ikariamkings101.weebly.com/military-units.html
+________________
+
+
+Apéndices
+Apéndice A: Glosario de Términos (ACTUALIZADO)
+                                                         * HP (Hit Points): Puntos de vida de una unidad
+                                                         * Armadura: Reducción de daño recibido
+                                                         * Daño: Daño base infligido por una unidad
+                                                         * Precisión (Accuracy): Porcentaje de ataques efectivos (0-100%)
+                                                         * Tamaño: Espacio que ocupa una unidad en un slot
+                                                         * Munición: Número de ataques que puede realizar una unidad antes de retirarse a la reserva
+                                                         * Reserva: Estado de unidades sin munición que ya no participan en el combate
+                                                         * Slot: Espacio en una línea de batalla que puede contener unidades
+                                                         * Línea de Batalla: Agrupación de unidades por función (primera línea, flancos, etc.)
+                                                         * Orden de Ataque: Secuencia en que las líneas atacan (1-6)
+                                                         * Prioridad de Ataque: Objetivos preferidos de cada línea
+                                                         * Mejora Individual: Nivel de mejora (0-3) de cada unidad específica
+                                                         * Hefesto Global: Bonificación (niveles 0-5) aplicada a todas las unidades del bando
+                                                         * Attacking Matrix (Am): Matriz n×m de unidades atacantes que determina distribución de ataques
+                                                         * Slot Renumbering: Orden específico en que los slots reciben ataques según tipo de línea
+                                                         * Reserve-Redistribution (RR): Redistribución de daño entre todas las unidades al inicio de ronda
+                                                         * Slot-Redistribution (SR): Redistribución de daño dentro de cada slot después que línea dispara
+                                                         * Immediate-Redistribution (IR): Redistribución de daño durante ataque (Portaglobos/Espolones)
+                                                         * Kill Type: Tipo de eliminación (1-kill, D-kill, P-kill, I-kill, IR-kill, M-kill)
+Apéndice B: Fórmulas Matemáticas (ACTUALIZADAS)
+Daño Efectivo:
+Daño_Efectivo = MAX(0, Daño_Atacante - Armadura_Defensor)
+Armadura con Mejoras Individuales y Hefesto Global:
+Armadura_Final = Armadura_Base + Armadura_Mejora_Individual[nivel] + Armadura_Hefesto_Global[nivel]
+Daño con Mejoras Individuales y Hefesto Global:
+Daño_Final = (Daño_Base + Daño_Mejora_Individual[nivel]) × (1 + Bonus_Hefesto_Global[nivel])
+Attacking Matrix - Distribución de Ataques:
+Fila i ataca Slot j donde: j ≡ i (mod m)
+Reserve-Redistribution:
+damage_per_unit = total_damage_accumulated / total_units_alive
+HP_unit = HP_base - damage_per_unit
+Slot-Redistribution:
+damage_per_unit_in_slot = total_damage_in_slot / units_in_slot
+HP_unit = HP_base - damage_per_unit_in_slot
+Immediate-Redistribution:
+Si units_in_slot >= threshold:
+damage_per_unit = incoming_damage / units_in_slot
+Sino:
+damage_to_first_unit = incoming_damage
+Indirect Kill (I-kill):
+kills = floor(sum(all_attacks) / target_HP)
+Ataques Efectivos con Precisión:
+effective_attacks = floor(total_units × (accuracy / 100))
+Apéndice C: Ejemplos de Cálculo (ACTUALIZADOS)
+Ejemplo 1: Hoplita con Mejora Individual 3 y Hefesto Global 5
+Paso 1: Stats base (del JSON unidades.json)
+                                                         * Daño base: 18
+                                                         * Armadura base: 1
+Paso 2: Aplicar mejora individual nivel 3 (del JSON)
+                                                         * Daño-mejora3: 24
+                                                         * Armadura-mejora3: 7
+Paso 3: Aplicar Hefesto global nivel 5
+                                                         * Armadura Hefesto nivel 5: +20
+                                                         * Daño Hefesto nivel 5: +15%
+Cálculo Final:
+Daño_Final = (Daño_Base + Daño_Mejora_Individual[3]) × (1 + 0.15)
+= (18 + 6) × 1.15
+= 24 × 1.15
+= 27.6
+Armadura_Final = Armadura_Base + Armadura_Mejora_Individual[3] + Armadura_Hefesto_Global[5]
+= 1 + 7 + 20
+= 28
+Ejemplo 2: Attacking Matrix - 35 Steam Rams en 7 slots
+Configuración:
+                                                         * Nivel ciudad: 25+ (7 slots × 50 capacidad)
+                                                         * 35 Steam Rams (tamaño 5) = 35 × 5 = 175 puntos
+                                                         * Distribución: 7 slots × 5 rams = 35 rams (matriz 5×7)
+Matriz de Ataque:
+Slot1 Slot2 Slot3 Slot4 Slot5 Slot6 Slot7
+F1 [ R1 R6 R11 R16 R21 R26 R31 ]
+F2 [ R2 R7 R12 R17 R22 R27 R32 ]
+F3 [ R3 R8 R13 R18 R23 R28 R33 ]
+F4 [ R4 R9 R14 R19 R24 R29 R34 ]
+F5 [ R5 R10 R15 R20 R25 R30 R35 ]
+Distribución de Ataques (sin renumeración):
+Fila 1: 1 mod 7 = 1 → ataca Slot 1
+Fila 2: 2 mod 7 = 2 → ataca Slot 2
+Fila 3: 3 mod 7 = 3 → ataca Slot 3
+Fila 4: 4 mod 7 = 4 → ataca Slot 4
+Fila 5: 5 mod 7 = 5 → ataca Slot 5
+Con Renumeración de Primera Línea [6,4,2,1,3,5,7]:
+Slot físico 1 renumerado como "1" recibe ataques de filas que atacan slot renumerado "1"
+Ejemplo 3: Reserve-Redistribution
+Escenario inicial:
+                                                         * 100 Hoplitas (HP base: 56)
+                                                         * 50 Hoplitas dañados a HP 20
+                                                         * 50 Hoplitas intactos a HP 56
+Ronda 2 inicia - aplicar RR:
+Daño total acumulado = 50 × (56-20) + 50 × (56-56)
+= 50 × 36 + 0
+= 1800
+Daño por unidad = 1800 / 100 = 18
+HP tras RR = 56 - 18 = 38 (para TODAS las unidades)
+Ejemplo 4: Immediate-Redistribution - Rocket Ships vs Steam Rams
+Escenario 1: Sin IR (solo 5 Steam Rams)
+2 Rocket Ships (439 daño c/u) vs 5 Steam Rams (576 HP, 16 armadura)
+Daño efectivo: 439 - 16 = 423
+Rocket 1 ataca Ram 1:
+HP_Ram1 = 576 - 423 = 153 (sobrevive)
+Rocket 2 ataca Ram 1:
+HP_Ram1 = 153 - 423 = -270 (muere)
+Resultado: 1 Ram muerto, 4 supervivientes
+Escenario 2: Con IR (100 Steam Rams)
+2 Rocket Ships (439 daño c/u) vs 100 Steam Rams (576 HP c/u)
+IR activo (≥80 rams)
+Rocket 1: 423 daño dividido entre 100 = 4.23 por ram
+Rocket 2: 423 daño dividido entre 100 = 4.23 por ram
+HP tras ambos ataques: 576 - 8.46 = 567.54
+Resultado: 0 Rams muertos, 100 supervivientes
+Ejemplo 5: Precisión 70% - Lanceros
+Escenario:
+                                                         * 12 Lanceros (precisión 70%)
+Ataques efectivos:
+effective_attacks = floor(12 × 0.70) = floor(8.4) = 8
+Solo 8 lanceros atacan efectivamente
+4 lanceros "fallan" su ataque
+Impacto en Attacking Matrix:
+Matriz esperada: 12×7
+Filas efectivas: solo las primeras 8 filas atacan
+Filas 9-12: no atacan (filtradas por precisión)
+________________
+
+
+FIN DEL DOCUMENTO - VERSIÓN 3.0
+CAMBIOS PRINCIPALES EN v3.0:
+                                                         1. Incorporación de Attacking Matrix (Am Theory)
+                                                         2. Implementación de Slot Renumbering por tipo de línea
+                                                         3. 3 tipos de Damage Redistribution (RR, SR, IR)
+                                                         4. 6 tipos de Kill identificados y documentados
+                                                         5. Precisión variable (no siempre 100%)
+                                                         6. Mejoras individuales por unidad (no globales)
+                                                         7. Hefesto global con tabla completa (niveles 0-5)
+                                                         8. Validación contra estudio académico de Barbarossa/Xanto
+                                                         9. Prompts actualizados para implementación de mecánicas avanzadas
+                                                         10. Criterios de aceptación expandidos con validaciones de mecánicas avanzadas

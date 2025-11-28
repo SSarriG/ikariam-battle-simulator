@@ -1,0 +1,306 @@
+{
+    "terrestre": [
+        {
+            "nivel-min-ciudad": 1,
+            "nivel-max-ciudad": 4,
+            "unidades": {
+                "primera-linea": {
+                    "num-huecos": 3,
+                    "tamano-por-hueco": 30
+                },
+                "luchadores-distancia": {
+                    "num-huecos": 3,
+                    "tamano-por-hueco": 30
+                },
+                "flancos": {
+                    "num-huecos": 0,
+                    "tamano-por-hueco": 0
+                },
+                "artilleria": {
+                    "num-huecos": 1,
+                    "tamano-por-hueco": 30
+                },
+                "bombarderos": {
+                    "num-huecos": 1,
+                    "tamano-por-hueco": 10
+                },
+                "anti-aerea": {
+                    "num-huecos": 1,
+                    "tamano-por-hueco": 10
+                }
+            }
+        },
+        {
+            "nivel-min-ciudad": 5,
+            "nivel-max-ciudad": 9,
+            "unidades": {
+                "primera-linea": {
+                    "num-huecos": 5,
+                    "tamano-por-hueco": 30
+                },
+                "luchadores-distancia": {
+                    "num-huecos": 5,
+                    "tamano-por-hueco": 30
+                },
+                "flancos": {
+                    "num-huecos": 2,
+                    "tamano-por-hueco": 30
+                },
+                "artilleria": {
+                    "num-huecos": 2,
+                    "tamano-por-hueco": 30
+                },
+                "bombarderos": {
+                    "num-huecos": 1,
+                    "tamano-por-hueco": 20
+                },
+                "anti-aerea": {
+                    "num-huecos": 1,
+                    "tamano-por-hueco": 20
+                }
+            }
+        },
+        {
+            "nivel-min-ciudad": 10,
+            "nivel-max-ciudad": 16,
+            "unidades": {
+                "primera-linea": {
+                    "num-huecos": 7,
+                    "tamano-por-hueco": 30
+                },
+                "luchadores-distancia": {
+                    "num-huecos": 7,
+                    "tamano-por-hueco": 30
+                },
+                "flancos": {
+                    "num-huecos": 4,
+                    "tamano-por-hueco": 30
+                },
+                "artilleria": {
+                    "num-huecos": 3,
+                    "tamano-por-hueco": 30
+                },
+                "bombarderos": {
+                    "num-huecos": 1,
+                    "tamano-por-hueco": 30
+                },
+                "anti-aerea": {
+                    "num-huecos": 1,
+                    "tamano-por-hueco": 30
+                }
+            }
+        },
+        {
+            "nivel-min-ciudad": 17,
+            "nivel-max-ciudad": 24,
+            "unidades": {
+                "primera-linea": {
+                    "num-huecos": 7,
+                    "tamano-por-hueco": 40
+                },
+                "luchadores-distancia": {
+                    "num-huecos": 7,
+                    "tamano-por-hueco": 40
+                },
+                "flancos": {
+                    "num-huecos": 6,
+                    "tamano-por-hueco": 30
+                },
+                "artilleria": {
+                    "num-huecos": 4,
+                    "tamano-por-hueco": 30
+                },
+                "bombarderos": {
+                    "num-huecos": 2,
+                    "tamano-por-hueco": 20
+                },
+                "anti-aerea": {
+                    "num-huecos": 2,
+                    "tamano-por-hueco": 20
+                }
+            }
+        },
+        {
+            "nivel-min-ciudad": 25,
+            "nivel-max-ciudad": 100,
+            "unidades": {
+                "primera-linea": {
+                    "num-huecos": 7,
+                    "tamano-por-hueco": 50
+                },
+                "luchadores-distancia": {
+                    "num-huecos": 7,
+                    "tamano-por-hueco": 50
+                },
+                "flancos": {
+                    "num-huecos": 6,
+                    "tamano-por-hueco": 40
+                },
+                "artilleria": {
+                    "num-huecos": 5,
+                    "tamano-por-hueco": 30
+                },
+                "bombarderos": {
+                    "num-huecos": 2,
+                    "tamano-por-hueco": 30
+                },
+                "anti-aerea": {
+                    "num-huecos": 2,
+                    "tamano-por-hueco": 30
+                }
+            }
+        }
+    ],
+    "maritima": [
+        {
+            "nivel-min-puerto": 0,
+            "nivel-max-puerto": 7,
+            "unidades": {
+                "primera-linea": {
+                    "num-huecos": 3,
+                    "tamano-por-hueco": 15
+                },
+                "luchadores-distancia": {
+                    "num-huecos": 3,
+                    "tamano-por-hueco": 15
+                },
+                "flancos": {
+                    "num-huecos": 0,
+                    "tamano-por-hueco": 0
+                },
+                "artilleria": {
+                    "num-huecos": 1,
+                    "tamano-por-hueco": 15
+                },
+                "bombarderos": {
+                    "num-huecos": 1,
+                    "tamano-por-hueco": 10
+                },
+                "anti-aerea": {
+                    "num-huecos": 1,
+                    "tamano-por-hueco": 10
+                }
+            }
+        },
+        {
+            "nivel-min-puerto": 8,
+            "nivel-max-puerto": 14,
+            "unidades": {
+                "primera-linea": {
+                    "num-huecos": 5,
+                    "tamano-por-hueco": 15
+                },
+                "luchadores-distancia": {
+                    "num-huecos": 5,
+                    "tamano-por-hueco": 15
+                },
+                "flancos": {
+                    "num-huecos": 2,
+                    "tamano-por-hueco": 15
+                },
+                "artilleria": {
+                    "num-huecos": 2,
+                    "tamano-por-hueco": 15
+                },
+                "bombarderos": {
+                    "num-huecos": 1,
+                    "tamano-por-hueco": 10
+                },
+                "anti-aerea": {
+                    "num-huecos": 1,
+                    "tamano-por-hueco": 10
+                }
+            }
+        },
+        {
+            "nivel-min-puerto": 15,
+            "nivel-max-puerto": 21,
+            "unidades": {
+                "primera-linea": {
+                    "num-huecos": 7,
+                    "tamano-por-hueco": 15
+                },
+                "luchadores-distancia": {
+                    "num-huecos": 7,
+                    "tamano-por-hueco": 15
+                },
+                "flancos": {
+                    "num-huecos": 4,
+                    "tamano-por-hueco": 15
+                },
+                "artilleria": {
+                    "num-huecos": 3,
+                    "tamano-por-hueco": 15
+                },
+                "bombarderos": {
+                    "num-huecos": 1,
+                    "tamano-por-hueco": 15
+                },
+                "anti-aerea": {
+                    "num-huecos": 1,
+                    "tamano-por-hueco": 15
+                }
+            }
+        },
+        {
+            "nivel-min-puerto": 22,
+            "nivel-max-puerto": 28,
+            "unidades": {
+                "primera-linea": {
+                    "num-huecos": 7,
+                    "tamano-por-hueco": 20
+                },
+                "luchadores-distancia": {
+                    "num-huecos": 7,
+                    "tamano-por-hueco": 20
+                },
+                "flancos": {
+                    "num-huecos": 6,
+                    "tamano-por-hueco": 15
+                },
+                "artilleria": {
+                    "num-huecos": 4,
+                    "tamano-por-hueco": 15
+                },
+                "bombarderos": {
+                    "num-huecos": 2,
+                    "tamano-por-hueco": 10
+                },
+                "anti-aerea": {
+                    "num-huecos": 2,
+                    "tamano-por-hueco": 10
+                }
+            }
+        },
+        {
+            "nivel-min-puerto": 29,
+            "nivel-max-puerto": 100,
+            "unidades": {
+                "primera-linea": {
+                    "num-huecos": 7,
+                    "tamano-por-hueco": 25
+                },
+                "luchadores-distancia": {
+                    "num-huecos": 7,
+                    "tamano-por-hueco": 25
+                },
+                "flancos": {
+                    "num-huecos": 6,
+                    "tamano-por-hueco": 20
+                },
+                "artilleria": {
+                    "num-huecos": 5,
+                    "tamano-por-hueco": 15
+                },
+                "bombarderos": {
+                    "num-huecos": 2,
+                    "tamano-por-hueco": 15
+                },
+                "anti-aerea": {
+                    "num-huecos": 2,
+                    "tamano-por-hueco": 15
+                }
+            }
+        }
+    ]
+}

@@ -1,0 +1,346 @@
+import { Battlefield } from './Battlefield';
+import { BattleStatistics } from './BattleStatistics';
+import { BattleReport, RoundReport, AttackEvent } from './BattleReport';
+import { AttackSequencer } from './AttackSequencer';
+import { TargetSelector } from './TargetSelector';
+import { DamageCalculator } from './DamageCalculator';
+import { AmmunitionManager } from './AmmunitionManager';
+import { ReserveRedistributionService } from './ReserveRedistributionService';
+import { VirtualCombatState } from './VirtualCombatState';
+import { SlotRefillService } from './SlotRefillService';
+import { SlotRedistributionService } from './SlotRedistributionService';
+import { ImmediateRedistributionService } from './ImmediateRedistributionService';
+import { AccuracyFilter } from './AccuracyFilter';
+import { DamageQueue } from './DamageQueue';
+import { SlotFillingAlgorithm } from './SlotFillingAlgorithm';
+import { BattleStatus, Winner, UnitType } from './enums';
+import { Unit } from './Unit';
+
+export class CombatEngine {
+    private battlefield: Battlefield;
+    private statistics: BattleStatistics;
+    private currentRound: number = 0;
+    private maxRounds: number = 60; // Standard Ikariam limit
+    private status: BattleStatus = BattleStatus.Active;
+    private damageQueue: DamageQueue = new DamageQueue(); // For simultaneous damage
+
+    constructor(battlefield: Battlefield) {
+        this.battlefield = battlefield;
+        this.statistics = new BattleStatistics();
+        this.initializeStatistics();
+    }
+
+    private initializeStatistics(): void {
+        // Record all initial units
+        this.battlefield.attackerLines.forEach(line => {
+            line.getAllAliveUnits().forEach(unit => {
+                this.statistics.recordInitialUnit(unit, 'attacker');
+            });
+        });
+
+        this.battlefield.defenderLines.forEach(line => {
+            line.getAllAliveUnits().forEach(unit => {
+                this.statistics.recordInitialUnit(unit, 'defender');
+            });
+        });
+    }
+
+    runBattle(): BattleReport {
+        while (this.status === BattleStatus.Active && this.currentRound < this.maxRounds) {
+            this.currentRound++;
+            this.processRound();
+            this.checkVictoryConditions();
+        }
+
+        return this.generateReport();
+    }
+
+    /**
+     * Execute a single round of combat
+     * Returns true if battle is complete, false if more rounds remain
+     */
+    executeNextRound(): { completed: boolean; report: BattleReport } {
+        if (this.status !== BattleStatus.Active || this.currentRound >= this.maxRounds) {
+            return { completed: true, report: this.generateReport() };
+        }
+
+        this.currentRound++;
+        this.processRound();
+        this.checkVictoryConditions();
+
+        const completed = this.status !== BattleStatus.Active || this.currentRound >= this.maxRounds;
+        return {
+            completed,
+            report: this.generateReport() // Always return a report (partial or final)
+        };
+    }
+
+    /**
+     * Get current round number
+     */
+    getCurrentRound(): number {
+        return this.currentRound;
+    }
+
+    /**
+     * Get current battle status
+     */
+    getStatus(): BattleStatus {
+        return this.status;
+    }
+
+    /**
+     * Get battlefield for UI updates
+     */
+    getBattlefield(): Battlefield {
+        return this.battlefield;
+    }
+
+    private processRound(): void {
+        // Clear round statistics from previous round
+        const clearStats = (line: any) => {
+            line.slots.forEach((slot: any) => slot.clearRoundStats());
+        };
+        this.battlefield.attackerLines.forEach(clearStats);
+        this.battlefield.defenderLines.forEach(clearStats);
+
+        // 1. Refill slots from reserves (new units enter the battle)
+        this.refillSlotsFromReserves();
+
+        // 2. Redistribute units between slots (fill priority slots with healthy units)
+        this.battlefield.attackerLines.forEach(line => SlotRefillService.redistributeSlots(line));
+        this.battlefield.defenderLines.forEach(line => SlotRefillService.redistributeSlots(line));
+
+        // 3. Apply Reserve-Redistribution (RR)
+        // DISABLED: To ensure casualties occur round-by-round (1:1 damage model)
+        // this.applyReserveRedistribution();
+
+        const attackOrder = AttackSequencer.getAttackOrder();
+
+        // SEQUENTIAL LINE COMBAT:
+        // Iterate through each line type in order (Anti-Air -> Bombers -> Artillery -> etc.)
+        // For each line, both sides attack, then damage is applied and casualties removed.
+        // This ensures that if Anti-Air kills Bombers, those Bombers cannot attack in the next phase.
+
+        for (const lineType of attackOrder) {
+            console.log(`\n=== Processing line: ${lineType} ===`);
+
+            // Calculate attacker attacks for this line
+            this.processLineAttacks('attacker', lineType, 'defender');
+
+            // Calculate defender attacks for this line
+            this.processLineAttacks('defender', lineType, 'attacker');
+
+            // Apply damage immediately for this line exchange
+            console.log(`Applying queued damage for ${lineType}...`);
+            this.damageQueue.applyAll();
+
+            // Update statistics to reflect new HP/Alive states immediately
+            this.updateStatistics();
+
+            // Remove dead units immediately so they don't participate in subsequent phases
+            console.log(`Removing dead units after ${lineType} exchange...`);
+            this.battlefield.removeDeadUnits();
+        }
+
+        // Apply Slot-Redistribution (SR) after damage is applied but before units die
+        // DISABLED: SR causes excessive damage dilution in mass battles (100+ units per slot)
+        // TODO: Re-implement SR with scaling factor or unit count threshold
+        // this.battlefield.attackerLines.forEach(line => SlotRedistributionService.applySR(line));
+        // this.battlefield.defenderLines.forEach(line => SlotRedistributionService.applySR(line));
+
+        // Handle ammo depletion: Move empty units to reserves so they can be replaced
+        // This happens at the end of the round to prepare for the next one
+        this.handleAmmoDepletion();
+    }
+
+    private handleAmmoDepletion(): void {
+        const checkLine = (line: any) => {
+            line.slots.forEach((slot: any) => {
+                // Find units that are marked as in reserve (due to ammo depletion)
+                // but are still in the slot
+                const currentUnits = slot.units;
+                const depletedUnits = currentUnits.filter((u: any) => u.isInReserve() && u.isAlive());
+
+                if (depletedUnits.length > 0) {
+                    // Remove them from slot using replaceUnits (since units is a getter)
+                    const remainingUnits = currentUnits.filter((u: any) => !u.isInReserve());
+                    slot.replaceUnits(remainingUnits);
+
+                    // Add to line reserves
+                    line.reserves.push(...depletedUnits);
+                }
+            });
+        };
+
+        this.battlefield.attackerLines.forEach(checkLine);
+        this.battlefield.defenderLines.forEach(checkLine);
+    }
+
+    private updateStatistics(): void {
+        const updateLine = (line: any) => {
+            line.slots.forEach((slot: any) => {
+                slot.units.forEach((unit: any) => {
+                    this.statistics.updateUnitStatus(unit);
+                });
+            });
+        };
+
+        this.battlefield.attackerLines.forEach(updateLine);
+        this.battlefield.defenderLines.forEach(updateLine);
+    }
+
+    private applyReserveRedistribution(): void {
+        // Apply RR to all lines on both sides
+        this.battlefield.attackerLines.forEach(line => {
+            ReserveRedistributionService.applyRR(line);
+        });
+        this.battlefield.defenderLines.forEach(line => {
+            ReserveRedistributionService.applyRR(line);
+        });
+    }
+
+    private refillSlotsFromReserves(): void {
+        const refillLine = (line: any) => {
+            if (line.reserves.length > 0) {
+                // Take all reserves
+                const availableReserves = [...line.reserves];
+                // Clear reserves temporarily
+                line.reserves = [];
+
+                // Try to fill slots with reserves
+                // Note: SlotFillingAlgorithm.fill will put back any unused units into reserves
+                SlotFillingAlgorithm.fill(line, availableReserves);
+            }
+        };
+
+        this.battlefield.attackerLines.forEach(refillLine);
+        this.battlefield.defenderLines.forEach(refillLine);
+    }
+
+    private processLineAttacks(attackerSide: 'attacker' | 'defender', lineType: UnitType, enemySide: 'attacker' | 'defender'): void {
+        const attackerLine = this.battlefield.getLine(attackerSide, lineType);
+
+        if (!attackerLine.hasAliveUnits()) {
+            return;
+        }
+
+        const allAttackers = attackerLine.getAllAliveUnits();
+
+        // DIAGNOSTIC LOG
+        console.log(`[${attackerSide}] ${lineType}: ${allAttackers.length} total units before accuracy filter`);
+
+        // Apply accuracy filter
+        const effectiveAttackers = AccuracyFilter.getEffectiveAttackers(allAttackers);
+
+        // DIAGNOSTIC LOG
+        console.log(`[${attackerSide}] ${lineType}: ${effectiveAttackers.length} effective attackers after accuracy filter`);
+
+        // Create virtual combat state for sequential attack simulation
+        const virtualState = new VirtualCombatState();
+
+        let attackCount = 0;
+        // Process attacks sequentially (each attacker sees virtual state from previous attacks)
+        for (const attacker of effectiveAttackers) {
+            // Check if unit can attack (ammunition)
+            if (!AmmunitionManager.canAttack(attacker)) {
+                continue;
+            }
+
+            // Select target using virtual state
+            const target = TargetSelector.selectTarget(attacker, attackerLine, this.battlefield, enemySide, virtualState);
+
+            if (target) {
+                // Calculate damage
+                const damage = DamageCalculator.calculateDamage(attacker, target);
+
+                // Apply virtual damage (updates virtual HP and tracks virtual deaths)
+                virtualState.applyVirtualDamage(target, damage);
+
+                // Queue REAL damage for later application
+                this.damageQueue.addDamage(target, damage, attackerSide);
+                this.statistics.recordAttack(this.currentRound, attacker, target, damage, false);
+
+                attackCount++;
+            }
+
+            // Consume ammunition
+            AmmunitionManager.consumeAmmunition(attacker);
+        }
+
+        // DIAGNOSTIC LOG
+        console.log(`[${attackerSide}] ${lineType}: ${attackCount} attacks executed`);
+
+        // Virtual state is discarded after this line's attacks complete
+        // Real damage will be applied after BOTH sides attack
+    }
+
+    private findUnitSlot(unit: Unit, side: 'attacker' | 'defender') {
+        const lines = side === 'attacker' ? this.battlefield.attackerLines : this.battlefield.defenderLines;
+        for (const line of lines.values()) {
+            for (const slot of line.slots) {
+                if (slot.units.some(u => u.id === unit.id)) {
+                    return slot;
+                }
+            }
+        }
+        return null;
+    }
+
+    private checkVictoryConditions(): void {
+        const attackerHasUnits = this.battlefield.hasAliveUnits('attacker');
+        const defenderHasUnits = this.battlefield.hasAliveUnits('defender');
+
+        if (!attackerHasUnits || !defenderHasUnits) {
+            this.status = BattleStatus.Finished;
+        }
+    }
+
+    private determineWinner(): Winner {
+        const attackerHasUnits = this.battlefield.hasAliveUnits('attacker');
+        const defenderHasUnits = this.battlefield.hasAliveUnits('defender');
+
+        if (attackerHasUnits && !defenderHasUnits) {
+            return Winner.Attacker;
+        } else if (!attackerHasUnits && defenderHasUnits) {
+            return Winner.Defender;
+        } else {
+            return Winner.Draw;
+        }
+    }
+
+    private generateReport(): BattleReport {
+        const winner = this.determineWinner();
+
+        const attackerStatuses = this.statistics.getUnitStatusesBySide('attacker');
+        const defenderStatuses = this.statistics.getUnitStatusesBySide('defender');
+
+        const attackerUnitIds = attackerStatuses.map(s => s.unitId);
+        const defenderUnitIds = defenderStatuses.map(s => s.unitId);
+
+        // Generate round reports
+        const rounds: RoundReport[] = [];
+        for (let r = 1; r <= this.currentRound; r++) {
+            const events = this.statistics.getAttackEventsForRound(r);
+            rounds.push({
+                roundNumber: r,
+                attackEvents: events,
+                attackerUnitsAlive: attackerStatuses.filter(s => s.isAlive).length,
+                defenderUnitsAlive: defenderStatuses.filter(s => s.isAlive).length,
+            });
+        }
+
+        return {
+            battleId: `battle-${Date.now()}`,
+            winner,
+            totalRounds: this.currentRound,
+            rounds,
+            attackerUnits: attackerStatuses,
+            defenderUnits: defenderStatuses,
+            attackerTotalDamage: this.statistics.getTotalDamageDealt(attackerUnitIds),
+            defenderTotalDamage: this.statistics.getTotalDamageDealt(defenderUnitIds),
+            attackerUnitsLost: this.statistics.getUnitsLost(attackerUnitIds),
+            defenderUnitsLost: this.statistics.getUnitsLost(defenderUnitIds),
+        };
+    }
+}

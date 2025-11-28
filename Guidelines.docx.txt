@@ -1,0 +1,2586 @@
+﻿Simulador de Batallas de Ikariam - Documentación Técnica Completa
+Documento de Arquitectura e Implementación
+Autor: Ingeniero de Software Experto
+Fecha: 23 de Noviembre de 2025
+Versión: 1.0
+________________
+
+
+Tabla de Contenidos
+1. Investigación del Sistema de Batallas
+2. Mecánicas de Combate Terrestre
+3. Mecánicas de Combate Marítimo
+4. Arquitectura del Sistema
+5. Plan de Implementación por Fases
+6. Prompts para Agentes IA
+7. Criterios de Aceptación y QA
+________________
+
+
+1. Investigación del Sistema de Batallas
+1.1 Mecánicas Fundamentales de Ikariam
+1.1.1 Estructura del Campo de Batalla
+El sistema de batallas de Ikariam utiliza una estructura de campo de batalla por slots que varía según el nivel de la ciudad (terrestre) o puerto (marítimo).
+Tipos de Líneas de Batalla:
+1. Primera Línea (primera-linea): Unidades de combate cuerpo a cuerpo pesadas
+2. Luchadores a Distancia (luchadores-distancia): Unidades de ataque a distancia
+3. Flancos: Unidades ligeras de infantería
+4. Artillería: Unidades de asedio y bombardeo pesado
+5. Bombarderos: Unidades aéreas ofensivas
+6. Anti-aérea (anti-aerea): Unidades de defensa contra bombarderos
+Análisis de campos.json:
+Batallas Terrestres:
+* Nivel 1-4 ciudad: 3 slots primera línea, 3 luchadores distancia, 0 flancos, 1 artillería (30 unidades/slot)
+* Nivel 5-9 ciudad: 5+5+2+2 slots (30 unidades/slot)
+* Nivel 10-16 ciudad: 7+7+4+3 slots (30 unidades/slot)
+* Nivel 17-24 ciudad: 7+7+6+4 slots (40/30 unidades/slot)
+* Nivel 25+ ciudad: 7+7+6+5 slots (50/40/30 unidades/slot)
+Batallas Marítimas:
+* Nivel 0-7 puerto: 3+3+0+1 slots (15 unidades/slot)
+* Nivel 8-14 puerto: 5+5+2+2 slots (15 unidades/slot)
+* Nivel 15-21 puerto: 7+7+4+3 slots (15 unidades/slot)
+* Nivel 22-28 puerto: 7+7+6+4 slots (20/15 unidades/slot)
+* Nivel 29+ puerto: 7+7+6+5 slots (25/20/15 unidades/slot)
+Bombarderos y Anti-aérea:
+* Terrestres: 1-2 slots con capacidad 10-30 unidades
+* Marítimas: 1-2 slots con capacidad 10-15 unidades
+1.1.2 Sistema de Daño y Armadura
+Fórmula Base de Daño:
+Daño Efectivo = MAX(0, Daño Base de Atacante - Armadura del Defensor)
+Componentes del Daño:
+* Daño Base: Definido en unidades.json para cada tipo de unidad
+* Armadura: Reduce el daño recibido punto por punto
+* Precisión: Siempre 100% según los datos (no hay mecánica de miss)
+* Puntos de Golpe (HP): Vida total de la unidad
+Sistema de Mejoras:
+Cada unidad tiene 3 niveles de mejora que afectan:
+* Daño: daño-mejora1, daño-mejora2, daño-mejora3
+* Armadura: armadura-mejora1, armadura-mejora2, armadura-mejora3
+Las mejoras se aplican incrementalmente (mejora3 > mejora2 > mejora1 > base).
+1.1.3 Efecto Hefesto (Fragua de Hefesto)
+Basado en la investigación[1]:
+Nivel de Fragua de Hefesto:
+* Nivel 5: +20 armadura adicional y +15% daño
+Aplicación:
+Armadura Total = Armadura Base + Armadura Mejora + Bonus Hefesto
+Daño Total = (Daño Base + Daño Mejora) × (1 + Bonus Hefesto %)
+Ejemplo con Gigante a Vapor (Steam Giant):
+* HP base: 184
+* Armadura base: 3
+* Daño base: 42
+* Con Hefesto nivel 5: Armadura = 23, Daño = 48.3
+1.2 Distribución de Unidades en Slots
+1.2.1 Algoritmo de Llenado de Slots
+Análisis de lineas.json:
+Cada línea tiene una prioridad de posición específica que define el orden en que las unidades llenan los slots disponibles.
+Ejemplo Primera Línea Terrestre:
+1. Hoplita (tamaño 1)
+2. Gigante a Vapor (tamaño 3)
+3. Espadachín (tamaño 1)
+4. Lancero (tamaño 1)
+5. Fusilero (tamaño 4)
+6. Arquero (tamaño 1)
+7. Hondero (tamaño 1)
+Algoritmo de Distribución:
+Para cada slot en la línea:
+capacidad_slot = tamaño-por-hueco
+unidades_restantes = capacidad_slot
+Para cada tipo_unidad en orden de prioridad:
+cantidad_disponible = unidades[tipo_unidad]
+tamaño_unidad = unidades.json[tipo_unidad].tamaño
+unidades_que_caben = MIN(cantidad_disponible, unidades_restantes / tamaño_unidad)
+
+asignar unidades_que_caben al slot
+unidades_restantes -= unidades_que_caben × tamaño_unidad
+
+Si unidades_restantes == 0: pasar al siguiente slot
+
+Comportamiento Clave:
+* Las unidades se distribuyen por prioridad dentro de la línea
+* Cada slot tiene una capacidad máxima basada en el tamaño total de unidades
+* Una unidad con tamaño 5 ocupa 5 puntos de capacidad en un slot
+* Los slots se llenan completamente antes de pasar al siguiente
+1.2.2 Casos Especiales: Portaglobos y Espolones a Vapor
+Información de Fuentes[2]:
+Barco Portaglobos (Balloon Carrier):
+* HP: 140, Armadura: 0, Daño: 100, Tamaño: 5, Munición: 5
+* Mecánica especial: Se turnan para atacar, juntos son más resistentes
+* Táctica: 30 portaglobos = 3 rondas sin pérdidas, 36 = 4 rondas, 42 = 5 rondas
+* Distribución de daño: Cuando luchan juntos en grupo, el daño recibido se distribuye mejor entre ellos
+Barco Espolón a Vapor (Steam Ram):
+* HP: 576, Armadura: 16, Daño: 166, Tamaño: 5
+* Mecánica especial: "Se cubren entre sí" cuando están juntos (1 tanda)
+* Cuando están agrupados, se vuelven más resistentes y caen menos en batallas largas
+* Distribución de daño compartido: El daño total recibido por la línea se distribuye entre todos los espolones presentes
+* Pérdidas optimizadas: Mantener 80 mínimos juntos o todos juntos en defensa[3]
+Implementación de Daño Compartido:
+Si unidades del mismo tipo en slot > umbral_mínimo:
+daño_total_recibido = calcular_daño_entrante()
+daño_por_unidad = daño_total_recibido / cantidad_unidades
+Para cada unidad:
+aplicar daño_por_unidad
+De lo contrario:
+aplicar daño normal (unidad por unidad)
+1.3 Orden de Ataque y Prioridades
+1.3.1 Secuencia de Ataque por Ronda
+Análisis de lineas.json - orden-ataque:
+1. Anti-aérea (orden 1): Ataca primero a bombarderos
+2. Bombarderos (orden 2): Ataca a artillería, luchadores distancia
+3. Artillería (orden 3): Ataca a primera línea, flancos
+4. Luchadores a Distancia (orden 4): Ataca a primera línea, flancos
+5. Primera Línea (orden 5): Ataca a primera línea enemiga, luchadores distancia
+6. Flancos (orden 6): Ataca a flancos enemigos, luchadores distancia
+Importante: El orden define qué líneas atacan primero en cada ronda.
+1.3.2 Prioridades de Ataque por Línea
+Análisis de lineas.json - prioridad-ataque:
+Cada línea tiene objetivos prioritarios definidos:
+Anti-aérea:
+1. Bombarderos (objetivo primario)
+2. Anti-aérea (objetivo secundario)
+Bombarderos:
+1. Artillería
+2. Luchadores a distancia
+3. Primera línea
+4. Flancos
+Artillería:
+1. Primera línea
+2. Flancos
+Luchadores a Distancia:
+1. Primera línea
+2. Flancos
+3. Luchadores a distancia (objetivo terciario)
+Primera Línea:
+1. Primera línea enemiga
+2. Luchadores a distancia
+3. Artillería
+4. Flancos
+Flancos:
+1. Flancos enemigos
+2. Luchadores a distancia
+3. Artillería
+4. Primera línea
+Algoritmo de Selección de Objetivo:
+Para cada unidad atacante:
+Para cada objetivo_prioritario en orden de prioridad:
+Si existe línea objetivo_prioritario Y tiene unidades vivas:
+seleccionar slot con unidades vivas de objetivo_prioritario
+realizar ataque
+BREAK
+1.3.3 Sistema de Munición
+Análisis de unidades.json - campo munición:
+Unidades con munición limitada:
+* Bombardero terrestre: 2 rondas de munición
+* Hondero: 5 rondas
+* Girocóptero: 4 rondas
+* Fusilero: 3 rondas
+* Arquero: 3 rondas
+* Barco ballesta: 7 rondas
+* Barco catapulta: 6 rondas
+* Barco mortero: 5 rondas
+* Barco lanzamisiles: 2 rondas
+* Submarino: 4 rondas
+* Lancha palas: 5 rondas
+* Barco portaglobos: 5 rondas
+* Catapulta terrestre: 5 rondas
+* Mortero terrestre: 3 rondas
+Unidades sin munición (null): Combaten indefinidamente hasta morir
+* Hoplita, Gigante a Vapor, Espadachín, Lancero, Ariete
+* Barcos espolón (común y vapor), Barco lanzallamas
+Mecánica:
+Si unidad tiene munición Y munición_restante > 0:
+realizar_ataque()
+munición_restante -= 1
+Si munición_restante == 0:
+unidad se retira a la reserva
+unidad no puede atacar ni recibir daño
+Si no tiene munición (null):
+puede atacar indefinidamente
+1.4 Mecánicas de Batalla Avanzadas
+1.4.1 Flujo de una Ronda de Batalla
+Fase 1: Inicialización de Ronda
+1. Verificar unidades vivas en ambos bandos
+2. Actualizar estado de munición de todas las unidades
+3. Preparar orden de ataque según prioridades
+Fase 2: Fase Aérea
+1. Anti-aérea ataca bombarderos enemigos (orden 1)
+2. Bombarderos supervivientes atacan objetivos (orden 2)
+Fase 3: Fase de Artillería y Distancia
+3. Artillería ataca objetivos prioritarios (orden 3)
+4. Luchadores a distancia atacan (orden 4)
+Fase 4: Fase de Combate Cuerpo a Cuerpo
+5. Primera línea ataca (orden 5)
+6. Flancos atacan (orden 6)
+Fase 5: Resolución de Daño y Munición
+1. Aplicar todo el daño acumulado en la ronda
+2. Eliminar unidades destruidas (HP ≤ 0)
+3. Retirar a reserva unidades sin munición
+4. Redistribuir unidades en slots si es necesario
+Fase 6: Verificación de Condiciones de Victoria
+* Si un bando no tiene unidades: el otro gana
+* Si ambos tienen unidades: continuar a la siguiente ronda
+1.4.2 Distribución de Daño en Slots
+Mecanismo Normal:
+daño_entrante = atacante.daño - defensor.armadura
+defensor.hp -= daño_entrante
+Si defensor.hp <= 0:
+eliminar unidad
+daño_sobrante = ABS(defensor.hp)
+aplicar daño_sobrante a siguiente unidad en slot
+Mecanismo Especial (Portaglobos/Espolones a Vapor):
+Si cantidad_unidades_mismo_tipo >= umbral_agrupación:
+daño_total = SUM(todos_ataques_contra_slot)
+daño_por_unidad = daño_total / cantidad_unidades
+Para cada unidad:
+unidad.hp -= daño_por_unidad
+Si unidad.hp <= 0: eliminar unidad
+1.4.3 Sistema de Rondas y Duración
+Según fuentes[4]:
+* Cada ronda dura 15 minutos en el juego real
+* Las batallas continúan hasta que un bando es eliminado
+* Es posible ordenar retirada (se lucha una ronda adicional antes de retirarse)
+Para el simulador:
+* Las rondas son instantáneas (no hay tiempo real)
+* Continuar hasta victoria/derrota o límite de rondas (ej: 100 rondas)
+________________
+
+
+2. Mecánicas de Combate Terrestre
+2.1 Unidades Terrestres
+Análisis detallado de unidades.json:
+2.1.1 Primera Línea Terrestre
+Hoplita:
+* HP: 56, Armadura base: 1, Daño base: 18, Tamaño: 1
+* Mejoras: Daño (19/21/24), Armadura (2/4/7)
+* Rol: Unidad tanque básica, económica y efectiva
+Gigante a Vapor (Steam Giant):
+* HP: 184, Armadura base: 3, Daño base: 42, Tamaño: 3
+* Mejoras: Daño (43/45/48), Armadura (4/6/9)
+* Rol: Unidad tanque premium, alta resistencia
+* Nota especial: El daño recibido se comparte entre gigantes cuando están agrupados[5]
+2.1.2 Luchadores a Distancia Terrestres
+Hondero:
+* HP: 8, Armadura: 0, Daño base: 3, Tamaño: 1, Munición: 5
+* Mejoras: Daño (4/6/9), Armadura (1/3/6)
+* Rol: Unidad económica de hostigamiento
+Arquero:
+* HP: 16, Armadura: 0, Daño base: 5, Tamaño: 1, Munición: 3
+* Mejoras: Daño (6/8/11), Armadura (1/3/6)
+* Rol: Unidad estándar de ataque a distancia
+Fusilero:
+* HP: 12, Armadura: 0, Daño base: 29, Tamaño: 4, Munición: 3
+* Mejoras: Daño (30/32/35), Armadura (1/3/6)
+* Rol: Unidad de élite con alto daño, ocupa mucho espacio
+2.1.3 Flancos Terrestres
+Lancero:
+* HP: 13, Armadura: 0, Daño base: 4, Tamaño: 1
+* Mejoras: Daño (5/7/10), Armadura (1/3/6)
+* Rol: Unidad básica de flanqueo
+Espadachín:
+* HP: 18, Armadura: 0, Daño base: 10, Tamaño: 1
+* Mejoras: Daño (11/13/16), Armadura (1/3/6)
+* Rol: Unidad mejorada de flanqueo
+2.1.4 Artillería Terrestre
+Ariete (Battering Ram):
+* HP: 88, Armadura base: 1, Daño base: 80, Tamaño: 5, Sin munición
+* Mejoras: Daño (81/83/86), Armadura (2/4/7)
+* Rol: Artillería cuerpo a cuerpo, efectiva contra muros e infantería[6]
+Catapulta:
+* HP: 54, Armadura: 0, Daño base: 133, Tamaño: 5, Munición: 5
+* Mejoras: Daño (134/136/139), Armadura (1/3/6)
+* Rol: Artillería media, efectiva contra muros y unidades pesadas
+Mortero:
+* HP: 32, Armadura: 0, Daño base: 270, Tamaño: 5, Munición: 3
+* Mejoras: Daño (271/273/276), Armadura (1/3/6)
+* Rol: Artillería pesada, máximo daño, muy frágil
+2.1.5 Unidades Aéreas Terrestres
+Girocóptero (Gyrocopter):
+* HP: 29, Armadura: 0, Daño base: 17, Tamaño: 1, Munición: 4
+* Mejoras: Daño (18/20/23), Armadura (1/3/6)
+* Rol: Anti-aérea, ataca bombarderos y otros girocópteros
+Bombardero:
+* HP: 40, Armadura: 0, Daño base: 48, Tamaño: 2, Munición: 2
+* Mejoras: Daño (49/51/54), Armadura (1/3/6)
+* Rol: Ataque aéreo contra artillería y luchadores a distancia
+2.2 Configuraciones de Campo Terrestre
+Tamaños de Campo según Nivel de Ciudad:
+Nivel Ciudad
+	Primera Línea
+	Luchadores Dist.
+	Flancos
+	Artillería
+	Bombarderos
+	Anti-aérea
+	1-4
+	3×30
+	3×30
+	0×0
+	1×30
+	1×10
+	1×10
+	5-9
+	5×30
+	5×30
+	2×30
+	2×30
+	1×20
+	1×20
+	10-16
+	7×30
+	7×30
+	4×30
+	3×30
+	1×30
+	1×30
+	17-24
+	7×40
+	7×40
+	6×30
+	4×30
+	2×20
+	2×20
+	25+
+	7×50
+	7×50
+	6×40
+	5×30
+	2×30
+	2×30
+	
+
+2.3 Estrategias y Tácticas Terrestres
+Composición Ofensiva Estándar:
+* Primera línea: Hoplitas (tanques económicos) o Gigantes a Vapor (mayor resistencia)
+* Luchadores a distancia: Mix de Arqueros/Fusileros para maximizar daño
+* Artillería: Morteros para destrucción máxima, Catapultas como soporte
+* Bombarderos: Para eliminar artillería enemiga
+* Girocópteros: Protección contra bombarderos enemigos
+Composición Defensiva:
+* Maximizar Primera Línea con Gigantes a Vapor agrupados (daño compartido)
+* Artillería pesada (Morteros) en retaguardia
+* Anti-aérea suficiente para contrarrestar bombarderos
+________________
+
+
+3. Mecánicas de Combate Marítimo
+3.1 Unidades Marítimas
+3.1.1 Primera Línea Marítima
+Barco Lanzallamas (Fire Ship):
+* HP: 219, Armadura base: 8, Daño base: 82, Tamaño: 2, Sin munición
+* Mejoras: Daño (84/88/94), Armadura (10/14/20)
+* Rol: Unidad tanque estándar naval
+Barco Espolón a Vapor (Steam Ram):
+* HP: 576, Armadura base: 16, Daño base: 166, Tamaño: 5, Sin munición
+* Mejoras: Daño (168/172/178), Armadura (18/22/28)
+* Rol: Super tanque naval con mecánica de daño compartido
+* Especial: Se cubren entre sí cuando están juntos, mayor resistencia en grupo[7]
+3.1.2 Luchadores a Distancia Marítimos
+Barco Ballesta:
+* HP: 154, Armadura base: 14, Daño base: 28, Tamaño: 2, Munición: 7
+* Mejoras: Daño (30/34/40), Armadura (16/20/26)
+* Rol: Unidad estándar con alta armadura
+Barco Catapulta:
+* HP: 148, Armadura base: 10, Daño base: 45, Tamaño: 3, Munición: 6
+* Mejoras: Daño (47/51/57), Armadura (12/16/22)
+* Rol: Unidad de daño medio
+Barco Mortero (Mortar Ship):
+* HP: 154, Armadura base: 6, Daño base: 69, Tamaño: 4, Munición: 5
+* Mejoras: Daño (71/75/81), Armadura (8/12/18)
+* Rol: Alto daño, armadura moderada
+3.1.3 Flancos Marítimos
+Barco Espolón Común (Ram Ship):
+* HP: 154, Armadura base: 9, Daño base: 75, Tamaño: 3, Sin munición
+* Mejoras: Daño (77/81/87), Armadura (11/15/21)
+* Rol: Unidad de flanqueo con buen equilibrio
+3.1.4 Artillería Marítima
+Barco Lanzamisiles (Rocket Ship):
+* HP: 65, Armadura base: 6, Daño base: 380, Tamaño: 4, Munición: 2
+* Mejoras: Daño (382/386/392), Armadura (8/12/18)
+* Rol: Artillería de altísimo daño, muy frágil, munición limitada
+Submarino (Diving Boat):
+* HP: 110, Armadura base: 6, Daño base: 123, Tamaño: 3, Munición: 4
+* Mejoras: Daño (125/129/135), Armadura (8/12/18)
+* Rol: Artillería equilibrada, uso táctico contra Lanzallamas
+3.1.5 Unidades Aéreas Marítimas
+Lancha Palas (Paddle Speedboat):
+* HP: 20, Armadura: 0, Daño base: 12, Tamaño: 1, Munición: 5
+* Mejoras: Daño (14/18/24), Armadura (2/6/12)
+* Rol: Anti-aérea, muy frágil
+Barco Portaglobos (Balloon Carrier):
+* HP: 140, Armadura: 0, Daño base: 100, Tamaño: 5, Munición: 5
+* Mejoras: Daño (102/106/112), Armadura (2/6/12)
+* Rol: Bombardero naval con mecánica de turno compartido
+* Especial: Se turnan para atacar, más resistentes en grupo[8]
+3.2 Configuraciones de Campo Marítimo
+Tamaños de Campo según Nivel de Puerto:
+Nivel Puerto
+	Primera Línea
+	Luchadores Dist.
+	Flancos
+	Artillería
+	Bombarderos
+	Anti-aérea
+	0-7
+	3×15
+	3×15
+	0×0
+	1×15
+	1×10
+	1×10
+	8-14
+	5×15
+	5×15
+	2×15
+	2×15
+	1×10
+	1×10
+	15-21
+	7×15
+	7×15
+	4×15
+	3×15
+	1×15
+	1×15
+	22-28
+	7×20
+	7×20
+	6×15
+	4×15
+	2×10
+	2×10
+	29+
+	7×25
+	7×25
+	6×20
+	5×15
+	2×15
+	2×15
+	
+
+3.3 Tácticas Navales Específicas
+Ataque Estándar (Fuente: Guía Flotero[9]):
+* 24-47 Lanzallamas (tandas variables según flota rival)
+* 80-315 Espolones a Vapor (mínimo 80 juntos o todos en defensa)
+* 42 Morteros (siempre en tandas de 42)
+* 56 Catapultas (soporte de munición para 2ª línea)
+* 100 Submarinos (vs Lanzallamas o Espolones Comunes en primera línea)
+* 210 Lanzamisiles (cuando rival tiene Espolones a Vapor al frente)
+* 36-42 Portaglobos (tandas de 36 = 5 rondas de ataque sin pérdidas)
+Defensa Básica:
+* 1 Lanzallamas + 6 Portaglobos: Hunde 4-6 Lanzamisiles con 0-2 pérdidas de Portaglobos
+Bombardeo:
+* 1 Espolón Común + 6 Portaglobos con fragua activada
+* 198 Portaglobos = 33 tandas que eliminan 198 Lanzamisiles sin pérdidas
+________________
+
+
+4. Arquitectura del Sistema
+4.1 Visión General
+Patrón Arquitectónico: Domain-Driven Design (DDD) + Clean Architecture
+Capas del Sistema:
+┌─────────────────────────────────────────┐
+│ Presentation Layer (UI/API) │
+├─────────────────────────────────────────┤
+│ Application Layer (Use Cases) │
+├─────────────────────────────────────────┤
+│ Domain Layer (Business Logic) │
+├─────────────────────────────────────────┤
+│ Infrastructure Layer (Data/Services) │
+└─────────────────────────────────────────┘
+4.2 Módulos del Dominio
+4.2.1 Módulo de Unidades (Units)
+Entidades:
+* Unit: Clase base abstracta para todas las unidades
+* TerrestrialUnit: Unidades terrestres
+* MaritimeUnit: Unidades marítimas
+* UnitType: Enum con todos los tipos de unidades
+* UnitStats: Value Object con estadísticas (HP, armadura, daño, tamaño, munición)
+Servicios:
+* UnitFactory: Crea instancias de unidades con stats específicos
+* UnitUpgradeService: Aplica mejoras a las unidades
+* HephaestusService: Calcula bonificaciones de Hefesto
+4.2.2 Módulo de Campo de Batalla (Battlefield)
+Entidades:
+* Battlefield: Representa el campo de batalla completo
+* BattleLine: Representa una línea de batalla (primera línea, flancos, etc.)
+* BattleSlot: Representa un slot dentro de una línea
+* BattlefieldConfiguration: Configuración de slots según nivel
+Value Objects:
+* BattleType: Enum (Terrestrial, Maritime)
+* LineType: Enum (FirstLine, Ranged, Flanks, Artillery, Bombers, AntiAir)
+* SlotCapacity: Capacidad de un slot (número de huecos, tamaño por hueco)
+Servicios:
+* BattlefieldFactory: Crea campos de batalla según nivel de ciudad/puerto
+* UnitDistributionService: Distribuye unidades en slots según prioridades
+* SlotFillingAlgorithm: Implementa el algoritmo de llenado de slots
+4.2.3 Módulo de Combate (Combat)
+Entidades:
+* Battle: Representa una batalla completa
+* BattleRound: Representa una ronda de combate
+* AttackAction: Representa un ataque individual
+* DamageResult: Resultado de un ataque
+Servicios:
+* CombatEngine: Motor principal de combate
+* DamageCalculator: Calcula daño efectivo
+* TargetSelector: Selecciona objetivos según prioridades
+* AttackSequencer: Determina el orden de ataque
+* AmmunitionManager: Gestiona la munición de las unidades
+* SharedDamageService: Implementa daño compartido para Portaglobos/Espolones a Vapor
+Agregados:
+* BattleSimulation: Agregado raíz que coordina toda la simulación
+4.2.4 Módulo de Reportes (Reporting)
+Entidades:
+* BattleReport: Reporte completo de la batalla
+* RoundReport: Reporte de una ronda individual
+* CasualtyReport: Reporte de bajas por bando
+Value Objects:
+* BattleStatistics: Estadísticas generales (daño infligido, unidades perdidas, etc.)
+* VictoryCondition: Condición de victoria (eliminación total, retirada, límite de rondas)
+4.3 Diagrama de Clases Principales
+┌──────────────────┐
+│ BattleSimulation│
+├──────────────────┤
+│ - battlefield │──┐
+│ - combatEngine │ │
+│ - currentRound │ │
+├──────────────────┤ │
+│ + simulate() │ │
+│ + getReport() │ │
+└──────────────────┘ │
+│
+┌───────────┴────────────┐
+│ │
+┌─────────▼──────┐ ┌─────────▼──────┐
+│ Battlefield │ │ CombatEngine │
+├────────────────┤ ├────────────────┤
+│ - attacker │ │ - damageCalc │
+│ - defender │ │ - targetSel │
+│ - battleLines │ │ - attackSeq │
+├────────────────┤ ├────────────────┤
+│ + distribute() │ │ + executeRound()│
+└────────────────┘ └────────────────┘
+│
+│ 1:N
+│
+┌───────▼────────┐
+│ BattleLine │
+├────────────────┤
+│ - lineType │
+│ - slots │
+│ - attackOrder │
+│ - attackPrio │
+├────────────────┤
+│ + attack() │
+└────────────────┘
+│
+│ 1:N
+│
+┌───────▼────────┐
+│ BattleSlot │
+├────────────────┤
+│ - capacity │
+│ - units │
+├────────────────┤
+│ + fillUnits() │
+│ + getAlive() │
+└────────────────┘
+│
+│ 1:N
+│
+┌───────▼────────┐
+│ Unit │
+├────────────────┤
+│ - stats │
+│ - currentHP │
+│ - ammunition │
+├────────────────┤
+│ + attack() │
+│ + takeDamage() │
+│ + isAlive() │
+└────────────────┘
+4.4 Flujo de Datos
+Inicialización de Batalla:
+User Input → BattleSimulation.configure()
+→ BattlefieldFactory.create()
+→ UnitDistributionService.distribute()
+→ SlotFillingAlgorithm.fill()
+→ Battlefield configurado
+Ejecución de Ronda:
+BattleSimulation.simulate()
+→ CombatEngine.executeRound()
+→ AttackSequencer.getAttackOrder()
+→ Para cada línea en orden:
+→ TargetSelector.selectTargets()
+→ Para cada unidad atacante:
+→ DamageCalculator.calculate()
+→ Unit.takeDamage()
+→ AmmunitionManager.decreaseAmmo()
+→ RemoveDestroyedUnits()
+→ BattleReport.addRound()
+4.5 Tecnologías Recomendadas
+Lenguaje: TypeScript/JavaScript (Node.js) o Python
+Justificación:
+* TypeScript: Tipado estático, excelente para modelar el dominio
+* Python: Simplicidad, librerías científicas para análisis
+Estructura del Proyecto:
+ikariam-battle-simulator/
+├── src/
+│ ├── domain/
+│ │ ├── units/
+│ │ ├── battlefield/
+│ │ ├── combat/
+│ │ └── reporting/
+│ ├── application/
+│ │ ├── usecases/
+│ │ └── services/
+│ ├── infrastructure/
+│ │ ├── data/
+│ │ └── repositories/
+│ └── presentation/
+│ ├── cli/
+│ └── web/
+├── tests/
+│ ├── unit/
+│ ├── integration/
+│ └── fixtures/
+├── data/
+│ ├── unidades.json
+│ ├── campos.json
+│ └── lineas.json
+└── docs/
+________________
+
+
+5. Plan de Implementación por Fases
+Fase 0: Configuración del Proyecto
+Objetivo: Establecer la base del proyecto con estructura, herramientas y configuración inicial.
+Tareas:
+1. Inicializar repositorio Git
+2. Configurar estructura de carpetas según arquitectura
+3. Instalar dependencias (TypeScript/Node.js o Python + pytest)
+4. Configurar linter, formatter (ESLint/Prettier o Black)
+5. Configurar framework de testing (Jest/Mocha o pytest)
+6. Crear README inicial con instrucciones de instalación
+7. Configurar CI/CD básico (GitHub Actions o GitLab CI)
+Duración estimada: 1 día
+Fase 1: Módulo de Unidades
+Objetivo: Implementar el sistema de unidades con todas sus estadísticas y mejoras.
+Tareas:
+1. Crear clase base Unit con propiedades comunes
+2. Implementar UnitStats Value Object
+3. Crear enums UnitType, BattleType
+4. Implementar UnitFactory que carga datos desde unidades.json
+5. Implementar UnitUpgradeService para aplicar mejoras (mejora1/2/3)
+6. Implementar HephaestusService para bonificaciones de fragua
+7. Crear tests unitarios para todas las unidades y sus estadísticas
+Entregables:
+* Clases Unit, UnitStats, UnitType completamente funcionales
+* Factory que crea instancias correctas desde JSON
+* Servicios de mejora y Hefesto operativos
+* Cobertura de tests > 90%
+Duración estimada: 3-4 días
+Fase 2: Módulo de Campo de Batalla
+Objetivo: Implementar la estructura del campo de batalla y el algoritmo de distribución de unidades.
+Tareas:
+1. Crear clase BattlefieldConfiguration que carga datos desde campos.json
+2. Implementar clase BattleSlot con capacidad y unidades contenidas
+3. Implementar clase BattleLine con tipo, orden de ataque y prioridades
+4. Implementar clase Battlefield con dos bandos (atacante/defensor)
+5. Implementar SlotFillingAlgorithm según especificación
+6. Cargar prioridades de posición desde lineas.json
+7. Implementar BattlefieldFactory para crear campos según nivel
+8. Crear tests para distribución de unidades en diferentes escenarios
+Entregables:
+* Campo de batalla completamente modelado
+* Algoritmo de distribución funcionando correctamente
+* Validación de capacidades de slots
+* Tests para diferentes niveles de ciudad/puerto
+Duración estimada: 4-5 días
+Fase 3: Sistema de Daño y Combate Básico
+Objetivo: Implementar el sistema de cálculo de daño y combate básico sin mecánicas especiales.
+Tareas:
+1. Implementar DamageCalculator con fórmula base (daño - armadura)
+2. Implementar AmmunitionManager para gestión de munición
+3. Implementar método Unit.takeDamage() y Unit.isAlive()
+4. Implementar TargetSelector con prioridades de ataque desde lineas.json
+5. Implementar AttackSequencer con orden de ataque (1-6)
+6. Crear clase AttackAction y DamageResult
+7. Implementar lógica de eliminación de unidades destruidas
+8. Crear tests para cálculos de daño con diferentes escenarios
+Entregables:
+* Sistema de daño funcional
+* Gestión de munición operativa
+* Selección de objetivos según prioridades
+* Tests de combate básico
+Duración estimada: 5-6 días
+Fase 4: Motor de Combate y Rondas
+Objetivo: Implementar el motor de combate completo que ejecuta rondas de batalla.
+Tareas:
+1. Implementar clase BattleRound que representa una ronda
+2. Implementar CombatEngine.executeRound() con todas las fases
+3. Implementar secuencia de ataque completa (orden 1-6)
+4. Implementar lógica de verificación de victoria
+5. Implementar límite de rondas máximas
+6. Integrar todos los servicios (daño, objetivos, munición)
+7. Crear tests de integración para rondas completas
+Entregables:
+* Motor de combate funcional ejecutando rondas completas
+* Condiciones de victoria implementadas
+* Flujo completo de una batalla simple
+* Tests de integración exitosos
+Duración estimada: 5-6 días
+Fase 5: Mecánicas Especiales
+Objetivo: Implementar mecánicas avanzadas como daño compartido para Portaglobos y Espolones a Vapor.
+Tareas:
+1. Implementar SharedDamageService para daño compartido
+2. Identificar unidades con mecánicas especiales (Portaglobos, Espolones a Vapor)
+3. Implementar lógica de umbral mínimo para activar daño compartido
+4. Implementar distribución de daño entre unidades agrupadas
+5. Adaptar DamageCalculator para detectar y aplicar mecánicas especiales
+6. Crear tests específicos para estas mecánicas
+Entregables:
+* Daño compartido funcional para Portaglobos
+* Daño compartido funcional para Espolones a Vapor
+* Tests validando comportamiento especial
+* Documentación de las mecánicas
+Duración estimada: 3-4 días
+Fase 6: Sistema de Reportes
+Objetivo: Implementar generación de reportes detallados de batalla.
+Tareas:
+1. Crear clase BattleReport con estadísticas generales
+2. Crear clase RoundReport con detalles de cada ronda
+3. Crear clase CasualtyReport con bajas por bando y línea
+4. Implementar recopilación de datos durante la batalla
+5. Implementar formateo de reportes (texto, JSON)
+6. Agregar estadísticas: daño total, unidades perdidas, % daño, etc.
+7. Crear visualización básica de resultados
+Entregables:
+* Reportes completos de batalla
+* Estadísticas detalladas por ronda
+* Formato legible y formato JSON
+* Exportación de reportes
+Duración estimada: 3-4 días
+Fase 7: Interfaz de Usuario
+Objetivo: Crear interfaz para configurar y ejecutar simulaciones.
+Tareas:
+1. Diseñar interfaz (CLI o Web según preferencia)
+2. Implementar configuración de batallas (unidades, nivel, mejoras)
+3. Implementar visualización de campo de batalla
+4. Implementar control de ejecución (paso a paso, completa)
+5. Implementar visualización de reportes
+6. Agregar validaciones de entrada
+7. Crear documentación de uso
+Entregables:
+* Interfaz funcional (CLI o Web)
+* Configuración intuitiva de batallas
+* Visualización de resultados
+* Documentación de usuario
+Duración estimada: 5-7 días (CLI), 10-14 días (Web)
+Fase 8: Optimización y Testing Final
+Objetivo: Optimizar rendimiento y asegurar calidad del código.
+Tareas:
+1. Ejecutar análisis de cobertura de tests (objetivo > 85%)
+2. Crear tests de integración end-to-end
+3. Realizar pruebas de estrés (batallas grandes)
+4. Optimizar algoritmos críticos (distribución, combate)
+5. Refactorizar código según necesidad
+6. Documentar código complejo
+7. Crear suite de tests de regresión
+Entregables:
+* Cobertura de tests > 85%
+* Rendimiento optimizado
+* Documentación técnica completa
+* Suite de tests de regresión
+Duración estimada: 4-5 días
+Fase 9: Características Avanzadas (Opcional)
+Objetivo: Agregar funcionalidades adicionales y mejoras.
+Tareas:
+1. Implementar sistema de moral (Ares' Stronghold)[10]
+2. Implementar simulación de múltiples batallas (Monte Carlo)
+3. Agregar análisis estadístico de resultados
+4. Implementar optimizador de composiciones de ejército
+5. Agregar soporte para alianzas y batallas múltiples
+6. Crear API REST para integraciones
+Entregables:
+* Características avanzadas funcionales
+* API REST documentada
+* Análisis estadístico implementado
+Duración estimada: 7-10 días
+Resumen de Duración Total
+* Desarrollo Core (Fases 0-6): 24-33 días (~5-7 semanas)
+* Con Interfaz (Fase 7): 29-40 días (~6-8 semanas) para CLI
+* Con Interfaz Web (Fase 7): 34-47 días (~7-9 semanas)
+* Testing y Optimización (Fase 8): +4-5 días
+* Características Avanzadas (Fase 9): +7-10 días (opcional)
+Total estimado: 8-12 semanas para versión completa con interfaz web y testing exhaustivo.
+________________
+
+
+6. Prompts para Agentes IA
+Prompt Fase 1: Módulo de Unidades
+Eres un ingeniero de software experto en TypeScript y Domain-Driven Design. Tu tarea es implementar el Módulo de Unidades para un simulador de batallas de Ikariam.
+CONTEXTO:
+Ikariam es un juego de estrategia con batallas entre unidades que tienen estadísticas (HP, armadura, daño, tamaño, munición). Las unidades pueden tener mejoras (mejora1, mejora2, mejora3) y bonificaciones de Hefesto.
+REQUISITOS:
+1. Crear una clase abstracta Unit con las siguientes propiedades:
+   * id: string
+   * name: string
+   * type: UnitType (enum)
+   * battleType: BattleType (enum: Terrestrial, Maritime)
+   * lineType: LineType (enum: FirstLine, Ranged, Flanks, Artillery, Bombers, AntiAir)
+   * stats: UnitStats (Value Object)
+   * currentHP: number
+   * currentAmmunition: number | null
+   * upgradeLevel: number (0-3)
+   * hephaestusLevel: number (0-5)
+2. Crear Value Object UnitStats con propiedades inmutables:
+   * baseHP: number
+   * baseArmor: number
+   * baseDamage: number
+   * accuracy: number (siempre 100 según datos)
+   * size: number
+   * ammunition: number | null
+   * upgradeDamage: [number, number, number] // mejora1, mejora2, mejora3
+   * upgradeArmor: [number, number, number]
+3. Implementar método Unit.getEffectiveStats() que retorna:
+   * HP (sin modificar, es base)
+   * Armadura = baseArmor + upgradeArmor[upgradeLevel] + hephaestusBonus
+   * Daño = (baseDamage + upgradeDamage[upgradeLevel]) × (1 + hephaestusDamageBonus)
+4. Implementar UnitFactory.createFromJSON() que:
+   * Carga datos desde unidades.json (adjunto)
+   * Crea instancia correcta según tipo
+   * Valida datos requeridos
+5. Implementar HephaestusService.applyBonus():
+   * Nivel 5: +20 armadura, +15% daño
+   * Niveles intermedios: interpolar linealmente
+6. Implementar métodos de batalla:
+   * takeDamage(amount: number): void
+   * isAlive(): boolean
+   * canAttack(): boolean (verifica munición)
+   * consumeAmmunition(): void
+   * isInReserve(): boolean (verifica si está en reserva)
+   * sendToReserve(): void (retira unidad del combate)
+DATOS DE ENTRADA:
+Tienes acceso a unidades.json con formato:
+{
+"unit": [
+{
+"nombre-unidad": "hoplita",
+"puntos-golpe": 56,
+"armadura": 1,
+"daño": 18,
+"precision": 100,
+"daño-mejora1": 19,
+"daño-mejora2": 21,
+"daño-mejora3": 24,
+"armadura-mejora1": 2,
+"armadura-mejora2": 4,
+"armadura-mejora3": 7,
+"tamaño": 1,
+"municion": null,
+"tipo-batalla": "terrestre",
+"tipo-unidad": "primera-linea"
+},
+...
+]
+}
+ARQUITECTURA:
+* Seguir principios SOLID
+* Inmutabilidad donde sea posible
+* Separación clara de responsabilidades
+* Inyección de dependencias
+TESTS REQUERIDOS:
+1. Crear unidad desde JSON con stats correctos
+2. Aplicar mejoras nivel 1, 2, 3 y verificar stats
+3. Aplicar Hefesto nivel 5 y verificar bonificaciones
+4. takeDamage() reduce HP correctamente
+5. Unit muere cuando HP <= 0
+6. Munición se consume correctamente
+7. canAttack() retorna false cuando munición = 0
+ENTREGA:
+* Código TypeScript con tipos estrictos
+* Tests con Jest o Mocha
+* Comentarios para lógica compleja
+* README con ejemplos de uso
+Prompt Fase 2: Campo de Batalla y Distribución
+Eres un ingeniero de software experto. Implementa el Módulo de Campo de Batalla para el simulador de Ikariam.
+CONTEXTO:
+El campo de batalla está dividido en líneas (primera línea, flancos, artillería, etc.). Cada línea tiene múltiples slots con capacidad limitada por tamaño de unidades. Las unidades se distribuyen según prioridades definidas.
+REQUISITOS:
+1. Crear clase BattleSlot:
+   * capacity: number (capacidad total en puntos de tamaño)
+   * units: Unit[] (unidades asignadas)
+   * remainingCapacity: number (capacidad disponible)
+   * Métodos:
+      * addUnit(unit: Unit): boolean (retorna true si cabe)
+      * removeDeadUnits(): Unit[] (remueve y retorna unidades muertas)
+      * getAliveUnits(): Unit[]
+      * getTotalSize(): number
+2. Crear clase BattleLine:
+   * lineType: LineType
+   * slots: BattleSlot[]
+   * attackOrder: number (1-6 según orden de ataque)
+   * attackPriorities: LineType[] (objetivos prioritarios)
+   * unitPositionPriorities: string[] (orden de llenado de unidades)
+   * Métodos:
+      * fillSlots(availableUnits: Map<string, Unit[]>): void
+      * getAllAliveUnits(): Unit[]
+      * hasAliveUnits(): boolean
+      * getTotalUnits(): number
+3. Implementar SlotFillingAlgorithm:
+Algoritmo:
+Para cada slot en orden:
+capacidad_restante = slot.capacity
+Para cada tipo_unidad en orden de prioridad:
+mientras haya unidades disponibles Y quede capacidad:
+unidad = tomar próxima unidad de tipo_unidad
+si unidad.size <= capacidad_restante:
+agregar unidad al slot
+capacidad_restante -= unidad.size
+si no:
+pasar a siguiente slot
+4. Crear clase Battlefield:
+   * battleType: BattleType
+   * level: number (nivel de ciudad/puerto)
+   * attackerLines: Map<LineType, BattleLine>
+   * defenderLines: Map<LineType, BattleLine>
+   * Métodos:
+   * distributeUnits(attacker: Unit[], defender: Unit[]): void
+   * getLine(side: 'attacker'|'defender', lineType: LineType): BattleLine
+   * hasAliveUnits(side: 'attacker'|'defender'): boolean
+   5. Implementar BattlefieldFactory.create():
+   * Carga configuración desde campos.json
+   * Crea slots según nivel de ciudad/puerto
+   * Configura líneas con prioridades desde lineas.json
+DATOS DE ENTRADA:
+campos.json:
+{
+"terrestre": [
+{
+"nivel-min-ciudad": 1,
+"nivel-max-ciudad": 4,
+"unidades": {
+"primera-linea": { "num-huecos": 3, "tamano-por-hueco": 30 },
+...
+}
+}
+],
+"maritima": [...]
+}
+lineas.json:
+{
+"lineas": [
+{
+"nombre": "primera-linea",
+"orden-ataque": "5",
+"prioridad-posicion-terrestre": {
+"1": "hoplita",
+"2": "gigante-vapor",
+...
+},
+"prioridad-ataque": {
+"1": "primera-linea",
+"2": "luchadores-distancia",
+...
+}
+}
+]
+}
+TESTS REQUERIDOS:
+   1. Crear battlefield con configuración correcta para nivel 10 terrestre
+   2. Distribuir 100 hoplitas en 7 slots de capacidad 30
+   3. Verificar que slots se llenan en orden correcto
+   4. Mezclar unidades (hoplitas + gigantes vapor) y verificar prioridad
+   5. Verificar que unidades grandes (tamaño 5) no sobrepasen capacidad
+   6. Remover unidades muertas y verificar actualización de slots
+   7. Probar con nivel bajo (1-4) y alto (25+) y verificar diferencias
+ARQUITECTURA:
+   * Separación de responsabilidades
+   * Factory pattern para creación de battlefield
+   * Strategy pattern para algoritmo de llenado
+   * Composición sobre herencia
+ENTREGA:
+   * Código TypeScript
+   * Tests completos
+   * Documentación de algoritmo de distribución
+Prompt Fase 3: Sistema de Daño
+Eres un ingeniero experto. Implementa el Sistema de Daño y Combate Básico para el simulador de Ikariam.
+CONTEXTO:
+El sistema de combate calcula daño basado en estadísticas de atacante y defensor. Las unidades atacan según prioridades y orden definido. La munición se consume con cada ataque.
+REQUISITOS:
+   1. Implementar DamageCalculator:
+   * Método calculateDamage(attacker: Unit, defender: Unit): number
+   * Fórmula: MAX(0, attacker.effectiveDamage - defender.effectiveArmor)
+   * Considerar precisión (siempre 100%, pero incluir por extensibilidad)
+   2. Implementar AmmunitionManager:
+   * Método canAttack(unit: Unit): boolean
+   * Método consumeAmmunition(unit: Unit): void
+   * Método hasUnlimitedAmmo(unit: Unit): boolean
+   * Método sendToReserve(unit: Unit): void
+   * Lógica:
+   * Unidades con ammunition=null tienen munición infinita
+   * Cuando munición llega a 0, unidad se retira a la reserva (ya no combate)
+   3. Implementar TargetSelector:
+   * Método selectTarget(attackerLine: BattleLine, battlefield: Battlefield, enemySide: 'attacker'|'defender'): Unit | null
+   * Algoritmo:
+Para cada lineType en attackerLine.attackPriorities:
+enemyLine = battlefield.getLine(enemySide, lineType)
+si enemyLine.hasAliveUnits():
+retornar primera unidad viva de enemyLine
+retornar null (no hay objetivos)
+      4. Implementar clase AttackAction:
+      * attacker: Unit
+      * defender: Unit
+      * damage: number
+      * killed: boolean
+      * overkillDamage: number (daño sobrante si mató al defensor)
+      5. Implementar clase DamageResult:
+      * initialHP: number
+      * finalHP: number
+      * damageReceived: number
+      * unitKilled: boolean
+      6. Implementar AttackSequencer:
+      * Método getAttackOrder(): LineType[]
+      * Retorna líneas ordenadas por attackOrder (1-6)
+      * Orden: AntiAir (1) → Bombers (2) → Artillery (3) → Ranged (4) → FirstLine (5) → Flanks (6)
+      7. Integrar todo en flujo básico:
+executeAttack(attacker: Unit, battlefield: Battlefield, enemySide: string): AttackAction | null {
+if (!ammunitionManager.canAttack(attacker)) return null;
+target = targetSelector.selectTarget(attacker.lineType, battlefield, enemySide);
+if (!target) return null;
+damage = damageCalculator.calculateDamage(attacker, target);
+result = target.takeDamage(damage);
+ammunitionManager.consumeAmmunition(attacker);
+return new AttackAction(attacker, target, damage, result.unitKilled, result.overkillDamage);
+}
+TESTS REQUERIDOS:
+         1. Calcular daño: atacante 50 daño vs defensor 10 armadura = 40 daño
+         2. Calcular daño: atacante 10 daño vs defensor 15 armadura = 0 daño
+         3. Unidad con munición=3 puede atacar 3 veces, luego se retira a reserva
+         4. Unidad en reserva no puede atacar ni recibir daño
+         5. Unidad con munición=null puede atacar infinitamente
+         6. Seleccionar objetivo según prioridades (primera línea ataca a primera línea primero)
+         7. Si objetivo prioritario muerto, seleccionar siguiente en prioridad
+         8. AttackSequencer retorna orden correcto (1-6)
+         9. Ataque mata unidad con HP exacto (ej: 40 daño vs 40 HP)
+         10. Ataque con overkill (50 daño vs 30 HP) genera 20 overkill
+ARQUITECTURA:
+         * Strategy pattern para cálculo de daño
+         * Dependency injection
+         * Separación de cálculo y aplicación de daño
+         * Inmutabilidad en resultados
+ENTREGA:
+         * Código TypeScript
+         * Tests unitarios completos
+         * Documentación de fórmulas
+Prompt Fase 4: Motor de Combate
+Eres un ingeniero experto. Implementa el Motor de Combate completo que orquesta rondas de batalla.
+CONTEXTO:
+Una batalla consiste en múltiples rondas. Cada ronda ejecuta ataques en orden secuencial (1-6). La batalla termina cuando un bando es eliminado o se alcanza límite de rondas.
+REQUISITOS:
+         1. Crear clase BattleRound:
+         * roundNumber: number
+         * attackActions: AttackAction[]
+         * attackerCasualties: Map<UnitType, number>
+         * defenderCasualties: Map<UnitType, number>
+         * attackerDamageDealt: number
+         * defenderDamageDealt: number
+         2. Implementar CombatEngine.executeRound():
+executeRound(battlefield: Battlefield): BattleRound {
+const round = new BattleRound(currentRoundNumber);
+// Fase 1: Obtener orden de ataque
+const attackOrder = attackSequencer.getAttackOrder();
+// Fase 2: Ejecutar ataques por línea en orden
+for (const lineType of attackOrder) {
+// Atacante ataca a defensor
+const attackerLine = battlefield.getLine('attacker', lineType);
+for (const unit of attackerLine.getAllAliveUnits()) {
+if (!unit.isInReserve() && ammunitionManager.canAttack(unit)) {
+const action = executeAttack(unit, battlefield, 'defender');
+if (action) round.addAction(action);
+    // Verificar si se quedó sin munición
+   if (unit.ammunition !== null && unit.currentAmmunition === 0) {
+     unit.sendToReserve();
+   }
+ }
+}
+
+// Defensor ataca a atacante
+const defenderLine = battlefield.getLine('defender', lineType);
+for (const unit of defenderLine.getAllAliveUnits()) {
+ if (ammunitionManager.canAttack(unit)) {
+   const action = executeAttack(unit, battlefield, 'attacker');
+   if (action) round.addAction(action);
+ }
+}
+
+}
+// Fase 3: Remover unidades muertas y retirar unidades sin munición
+battlefield.removeDeadUnits();
+battlefield.moveOutOfAmmoUnitsToReserve();
+// Fase 4: Calcular estadísticas de ronda
+round.calculateStatistics();
+return round;
+}
+         3. Implementar Battle:
+         * battlefield: Battlefield
+         * rounds: BattleRound[]
+         * winner: 'attacker' | 'defender' | 'ongoing'
+         * maxRounds: number (default: 100)
+         * Método simulate(): void
+         * Método isFinished(): boolean
+         * Método getWinner(): string
+         4. Implementar Battle.simulate():
+simulate(): void {
+while (!this.isFinished() && this.rounds.length < this.maxRounds) {
+const round = combatEngine.executeRound(this.battlefield);
+this.rounds.push(round);
+// Verificar condiciones de victoria
+if (!battlefield.hasAliveUnits('attacker')) {
+this.winner = 'defender';
+break;
+}
+if (!battlefield.hasAliveUnits('defender')) {
+this.winner = 'attacker';
+break;
+}
+}
+if (this.rounds.length >= this.maxRounds) {
+this.winner = 'draw'; // empate por límite de rondas
+}
+}
+            5. Implementar Battlefield.removeDeadUnits():
+            * Iterar todas las líneas y slots
+            * Remover unidades con HP <= 0
+            * Registrar bajas por tipo
+            6. Implementar Battlefield.moveOutOfAmmoUnitsToReserve():
+            * Iterar todas las líneas y slots
+            * Identificar unidades con munición = 0
+            * Mover unidades a reserva (quedan fuera del combate)
+            * Registrar unidades en reserva por tipo
+TESTS REQUERIDOS:
+            1. Ejecutar ronda completa y verificar que todas las líneas atacan
+            2. Verificar orden de ataque correcto (anti-aérea primero, flancos último)
+            3. Batalla simple: 10 hoplitas vs 5 hoplitas → verificar ganador
+            4. Batalla con munición: arqueros se quedan sin munición después de 3 rondas y van a reserva
+4.1. Verificar que arqueros en reserva no son atacados ni atacan en rondas siguientes
+            5. Batalla alcanza límite de rondas → resultado "draw"
+            6. Verificar que unidades muertas no atacan en siguiente ronda
+            7. Batalla compleja multi-línea: primera línea + artillería vs defensor completo
+            8. Verificar estadísticas de ronda (daño total, bajas)
+ARQUITECTURA:
+               * Template Method para flujo de ronda
+               * Observer pattern para eventos de batalla (opcional)
+               * Command pattern para acciones de ataque
+               * Separación de ejecución y presentación
+ENTREGA:
+               * Código TypeScript
+               * Tests de integración completos
+               * Diagrama de flujo de ronda
+               * Documentación de condiciones de victoria
+Prompt Fase 5: Mecánicas Especiales
+Eres un ingeniero experto. Implementa las mecánicas especiales de daño compartido para Portaglobos y Espolones a Vapor.
+CONTEXTO:
+Según la investigación, los Portaglobos (Balloon Carriers) y Espolones a Vapor (Steam Rams) tienen una mecánica especial: cuando están agrupados juntos, el daño recibido se distribuye entre todas las unidades del mismo tipo en el slot, haciéndolos más resistentes.
+REQUISITOS:
+               1. Implementar SharedDamageService:
+class SharedDamageService {
+// Unidades con mecánica de daño compartido
+private readonly SHARED_DAMAGE_UNITS = [
+'barco-portaglobos',
+'barco-espolon-vapor'
+];
+// Umbral mínimo para activar daño compartido
+private readonly MIN_UNITS_FOR_SHARING = {
+'barco-portaglobos': 30,
+'barco-espolon-vapor': 80
+};
+shouldApplySharedDamage(units: Unit[]): boolean {
+// Verificar si las unidades son del mismo tipo
+if (units.length === 0) return false;
+const firstType = units[0].type;
+if (!units.every(u => u.type === firstType)) return false;
+// Verificar si es un tipo con daño compartido
+if (!this.SHARED_DAMAGE_UNITS.includes(firstType)) return false;
+
+// Verificar umbral mínimo
+const minUnits = this.MIN_UNITS_FOR_SHARING[firstType] || 1;
+return units.length >= minUnits;
+
+}
+applySharedDamage(units: Unit[], totalDamage: number): Unit[] {
+const aliveUnits = units.filter(u => u.isAlive());
+if (aliveUnits.length === 0) return [];
+// Distribuir daño equitativamente
+const damagePerUnit = totalDamage / aliveUnits.length;
+
+const casualties: Unit[] = [];
+for (const unit of aliveUnits) {
+ unit.takeDamage(damagePerUnit);
+ if (!unit.isAlive()) {
+   casualties.push(unit);
+ }
+}
+
+return casualties;
+
+}
+}
+               2. Modificar BattleSlot para soportar daño compartido:
+class BattleSlot {
+// ... propiedades existentes ...
+receiveAttack(damage: number, sharedDamageService: SharedDamageService): AttackResult {
+const aliveUnits = this.getAliveUnits();
+if (aliveUnits.length === 0) return new AttackResult(0, []);
+// Verificar si aplicar daño compartido
+if (sharedDamageService.shouldApplySharedDamage(aliveUnits)) {
+ // Daño compartido: distribuir entre todas las unidades
+ const casualties = sharedDamageService.applySharedDamage(aliveUnits, damage);
+ return new AttackResult(damage, casualties);
+} else {
+ // Daño normal: aplicar a primera unidad viva
+ const target = aliveUnits[0];
+ target.takeDamage(damage);
+ const casualties = target.isAlive() ? [] : [target];
+ return new AttackResult(damage, casualties);
+}
+
+}
+}
+               3. Actualizar DamageCalculator para acumular daño cuando hay agrupación:
+class DamageCalculator {
+// ... métodos existentes ...
+calculateSlotDamage(attackers: Unit[], slot: BattleSlot): number {
+// Acumular todo el daño de múltiples atacantes
+let totalDamage = 0;
+for (const attacker of attackers) {
+const targetUnit = slot.getFirstAliveUnit();
+if (targetUnit) {
+const damage = this.calculateDamage(attacker, targetUnit);
+totalDamage += damage;
+}
+}
+return totalDamage;
+}
+}
+               4. Implementar tests específicos:
+// Test 1: Portaglobos sin agrupación (< 30)
+// 20 portaglobos reciben ataque de 500 daño
+// Esperado: primera unidad recibe 500 daño y muere (HP=140)
+// Test 2: Portaglobos con agrupación (>= 30)
+// 36 portaglobos reciben ataque total de 500 daño
+// Esperado: cada uno recibe 500/36 = 13.89 daño, ninguno muere
+// Test 3: Espolones a Vapor con agrupación (>= 80)
+// 100 espolones reciben ataque total de 10000 daño
+// Esperado: cada uno recibe 100 daño, todos sobreviven (HP=576, armadura alta)
+// Test 4: Daño compartido con bajas
+// 40 portaglobos (HP=140 cada uno) reciben 6000 daño
+// Esperado: 6000/40 = 150 daño por unidad, todos mueren
+// Test 5: Múltiples rondas con daño compartido
+// 42 portaglobos pelean 5 rondas
+// Esperado: según fuente, 42 portaglobos duran 5 rondas sin pérdidas
+COMPORTAMIENTO ESPERADO:
+Según investigación:
+               * Portaglobos: 30 = 3 rondas sin pérdidas, 36 = 4 rondas, 42 = 5 rondas
+               * Espolones a Vapor: Mínimo 80 juntos, se cubren mutuamente, caen menos en batallas largas
+TESTS REQUERIDOS:
+               1. shouldApplySharedDamage() retorna true para portaglobos >= 30
+               2. shouldApplySharedDamage() retorna false para portaglobos < 30
+               3. Daño compartido distribuye correctamente entre unidades
+               4. Unidades con daño compartido sobreviven más rondas que sin él
+               5. Comparar: 25 portaglobos sin compartir vs 35 con compartir
+               6. Espolones a Vapor con 80+ unidades tienen mejor ratio de supervivencia
+               7. Verificar que otras unidades no se ven afectadas por esta mecánica
+ARQUITECTURA:
+               * Strategy pattern para diferentes tipos de daño
+               * Configuración externa de umbrales
+               * Métricas para validar efectividad de la mecánica
+ENTREGA:
+               * Código TypeScript
+               * Tests específicos para mecánicas especiales
+               * Análisis comparativo con/sin daño compartido
+               * Documentación de umbrales y comportamiento
+Prompt Fase 6: Sistema de Reportes
+Eres un ingeniero experto. Implementa el Sistema de Reportes completo para el simulador de batallas.
+CONTEXTO:
+El sistema debe generar reportes detallados de cada batalla, incluyendo estadísticas por ronda, bajas totales, daño infligido, y resultado final. Los reportes deben ser legibles por humanos y exportables a JSON.
+REQUISITOS:
+               1. Implementar clase BattleStatistics:
+class BattleStatistics {
+totalRounds: number;
+winner: 'attacker' | 'defender' | 'draw';
+attackerStats: {
+initialUnits: Map<UnitType, number>;
+survivingUnits: Map<UnitType, number>;
+casualties: Map<UnitType, number>;
+reserveUnits: Map<UnitType, number>; // unidades retiradas por falta de munición
+totalDamageDealt: number;
+totalDamageReceived: number;
+damageEfficiency: number; // daño dealt / daño received
+};
+defenderStats: {
+// mismo formato que attackerStats
+};
+calculateDamagePercentages(): { attacker: number, defender: number };
+calculateCasualtyRate(side: 'attacker' | 'defender'): number;
+}
+               2. Implementar clase RoundReport:
+class RoundReport {
+roundNumber: number;
+attackActions: AttackAction[];
+attackerStats: {
+unitsAtStart: Map<UnitType, number>;
+unitsAtEnd: Map<UnitType, number>;
+damageDealt: number;
+damageReceived: number;
+casualtiesThisRound: Map<UnitType, number>;
+};
+defenderStats: {
+// mismo formato
+};
+getTopDamageDealer(): { unit: UnitType, damage: number };
+getMostCasualties(): { unit: UnitType, count: number };
+}
+               3. Implementar clase BattleReport:
+class BattleReport {
+battleId: string;
+timestamp: Date;
+battleConfiguration: {
+battleType: 'terrestrial' | 'maritime';
+level: number;
+attackerComposition: Map<UnitType, number>;
+defenderComposition: Map<UnitType, number>;
+attackerUpgrades: Map<UnitType, number>;
+defenderUpgrades: Map<UnitType, number>;
+attackerHephaestus: number;
+defenderHephaestus: number;
+};
+roundReports: RoundReport[];
+statistics: BattleStatistics;
+// Métodos de generación
+generateTextReport(): string;
+generateJSONReport(): string;
+generateSummary(): string;
+exportToFile(format: 'txt' | 'json' | 'html'): void;
+}
+               4. Implementar generadores de formato:
+class TextReportGenerator {
+generate(report: BattleReport): string {
+// Formato estilo Ikariam:
+/*
+=====================================
+BATTLE REPORT - Battle #12345
+Date: 2025-11-23 10:30:00
+Type: Terrestrial (Level 25)
+=====================================
+INITIAL COMPOSITION:
+Attacker:
+ - Hoplite: 500
+ - Steam Giant: 50
+ - Mortar: 30
+
+Defender:
+ - Hoplite: 400
+ - Swordsman: 300
+ - Catapult: 20
+
+=====================================
+ROUND 1
+=====================================
+Attacker deals 15,420 damage
+Defender deals 12,380 damage
+
+Casualties:
+Attacker: -35 Hoplites
+Defender: -42 Hoplites, -3 Swordsmen
+
+[... más rondas ...]
+
+=====================================
+FINAL RESULT
+=====================================
+Winner: ATTACKER
+Battle lasted 8 rounds
+
+Final Statistics:
+Attacker:
+ - Initial units: 580
+ - Surviving units: 445 (76.7%)
+ - Reserve units: 50 (8.6%) [Out of ammunition]
+ - Casualties: 85 (14.7%)
+ - Total damage dealt: 98,450
+ - Total damage received: 72,330
+ - Damage efficiency: 1.36
+
+Defender:
+ - Initial units: 720
+ - Surviving units: 0 (0%)
+ - Reserve units: 120 (16.7%) [Out of ammunition]
+ - Casualties: 600 (83.3%)
+ - Total damage dealt: 72,330
+ - Total damage received: 98,450
+ - Damage efficiency: 0.73
+
+Damage distribution:
+ Attacker: 57.6%
+ Defender: 42.4%
+=====================================
+*/
+
+}
+}
+class JSONReportGenerator {
+generate(report: BattleReport): string {
+// JSON estructurado con toda la información
+return JSON.stringify({
+battleId: report.battleId,
+configuration: { ... },
+rounds: report.roundReports.map(r => ({
+round: r.roundNumber,
+actions: r.attackActions.length,
+attacker: { ... },
+defender: { ... }
+})),
+result: {
+winner: report.statistics.winner,
+totalRounds: report.statistics.totalRounds,
+statistics: { ... }
+}
+}, null, 2);
+}
+}
+               5. Integrar con Battle:
+class Battle {
+// ... propiedades existentes ...
+private report: BattleReport;
+simulate(): BattleReport {
+this.report = new BattleReport(this.generateId(), this.battlefield);
+while (!this.isFinished() && this.rounds.length < this.maxRounds) {
+ const round = this.combatEngine.executeRound(this.battlefield);
+ this.rounds.push(round);
+ 
+ const roundReport = this.generateRoundReport(round);
+ this.report.addRound(roundReport);
+ 
+ // ... verificar victoria ...
+}
+
+this.report.finalizeStatistics(this.battlefield, this.winner);
+return this.report;
+
+}
+getReport(): BattleReport {
+return this.report;
+}
+}
+TESTS REQUERIDOS:
+               1. Generar reporte de batalla simple y verificar estructura correcta
+               2. Verificar estadísticas totales (bajas, daño) coinciden con suma de rondas
+               3. Calcular damage efficiency correctamente
+               4. Exportar a JSON y verificar que se puede parsear de vuelta
+               5. Generar reporte de texto y verificar formato legible
+               6. Verificar que casualty rate se calcula correctamente
+               7. Identificar top damage dealer correctamente
+               8. Exportar a archivo y verificar que se crea correctamente
+FORMATO DE SALIDA:
+               * Texto: Legible, formato similar a reportes de Ikariam
+               * JSON: Estructurado, completo, parseable
+               * HTML: Opcional, con tablas y gráficos
+ARQUITECTURA:
+               * Builder pattern para construcción de reportes
+               * Strategy pattern para diferentes formatos
+               * Template Method para estructura de reportes
+ENTREGA:
+               * Código TypeScript
+               * Tests de generación de reportes
+               * Ejemplos de reportes en diferentes formatos
+               * Documentación de estructura de JSON
+Prompt Fase 7: Interfaz Web
+Eres un ingeniero experto en desarrollo frontend y diseño de interfaces. Implementa una Interfaz Web completa para el simulador de batallas de Ikariam con la estética característica del juego.
+CONTEXTO:
+La interfaz debe permitir a los usuarios configurar batallas fácilmente, ejecutar simulaciones, visualizar resultados en tiempo real, y exportar reportes. Debe seguir fielmente la paleta de colores y estética mediterránea de Ikariam. Las imágenes de las unidades están disponibles en la carpeta /assets/units/ del proyecto.
+REQUISITOS:
+🎨 PALETA DE COLORES Y DISEÑO
+Colores Primarios:
+               * Background: #fdf7dd (beige muy claro)
+               * Foreground: #612d04 (marrón oscuro - texto principal)
+               * Primary: #eccf8e (dorado beige - botones, elementos destacados)
+               * Secondary: #fbf3d0 (crema claro - inputs, fondos secundarios)
+Colores de Superficie:
+               * Card: #ffffff (blanco - tarjetas)
+               * Muted: #f8e5b1 (beige pálido - fondos sutiles)
+               * Accent: #d4b87f (oro intenso - hover, énfasis)
+Colores de Borde:
+               * Border: #c3a171 (marrón claro - bordes estándar)
+               * Border Decorative: #c9a584 (marrón rosado - bordes ornamentales)
+Gradientes:
+               * Panel: from-[#fdf7dd] to-[#f8e5b1]
+               * Button: from-[#eccf8e] to-[#d4b87f]
+✍️ TIPOGRAFÍA
+Familias:
+               * Arial Bold: Headers, botones, enlaces
+               * Lucida Grande Regular: Texto de cuerpo, labels, inputs
+               * Lucida Grande Bold: Labels, headers de sección
+Tamaños:
+               * 10px: Texto pequeño, ayuda contextual
+               * 11px: Texto de cuerpo, párrafos, links
+               * 12px: Botones, inputs, texto estándar
+               * 14px: Headers de sección (H3)
+               * 16px: Headers secundarios (H2)
+               * 18px: Headers principales (H1)
+🧩 COMPONENTES UI
+1. BOTONES:
+.btn-game {
+background: #eccf8e;
+border: 3px solid #c9a584;
+border-radius: 3px;
+padding: 6px 12px;
+font-family: Arial, sans-serif;
+font-weight: 700;
+font-size: 12px;
+color: #612d04;
+transition: all 0.2s;
+}
+.btn-game:hover { filter: brightness(1.05); }
+.btn-game:active { filter: brightness(0.95); }
+2. INPUTS:
+.input-game {
+background: #fbf3d0;
+border: 1px solid #c3a171;
+border-radius: 3px;
+padding: 4px 8px;
+font-family: 'Lucida Grande', sans-serif;
+font-size: 11px;
+}
+.input-game:focus {
+outline: none;
+box-shadow: 0 0 0 2px rgba(195, 161, 113, 0.5);
+}
+3. CARDS:
+.card-game {
+background: #ffffff;
+border: 2px solid #c3a171;
+border-radius: 3px;
+box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+4. TABLES:
+.table-game thead {
+background: linear-gradient(to bottom, #fdf7dd, #f8e5b1);
+border-top: 1px solid #c3a171;
+border-bottom: 1px solid #c3a171;
+font-family: 'Lucida Grande', sans-serif;
+font-weight: 700;
+font-size: 14px;
+}
+.table-game tbody tr:nth-child(even) { background: #fbf3d0; }
+.table-game tbody tr:nth-child(odd) { background: white; }
+📐 ESTRUCTURA DE LA INTERFAZ
+1. PANTALLA PRINCIPAL - CONFIGURACIÓN DE BATALLA:
+Wireframe:
+┌─────────────────────────────────────────────────────────────┐
+│ IKARIAM BATTLE SIMULATOR [⚙️ Settings] │
+├─────────────────────────────────────────────────────────────┤
+│ │
+│ ┌───────────────────┬───────────────────┐ │
+│ │ 📋 Setup │ ⚔️ Simulate │ 📊 Reports │ │
+│ └───────────────────┴───────────────────┘ │
+│ │
+│ Battle Type: [🏛️ Terrestrial ▼] Level: [25 ▼] │
+│ │
+│ ┌─── ATTACKER ─────────────────────────────────────────┐ │
+│ │ Upgrades: [●●●○] 3 Hephaestus: [●●●●●] 5 │ │
+│ │ │ │
+│ │ Army Composition: [➕ Add Unit] │ │
+│ │ ┌────────────────────────────────────────────────┐ │ │
+│ │ │ [IMG] Hoplita x 500 [🗑️] [✏️] │ │ │
+│ │ │ [IMG] Gigante Vapor x 50 [🗑️] [✏️] │ │ │
+│ │ │ [IMG] Mortero x 30 [🗑️] [✏️] │ │ │
+│ │ └────────────────────────────────────────────────┘ │ │
+│ │ Total Units: 580 | Total Size: 2150 │ │
+│ └────────────────────────────────────────────────────────┘ │
+│ │
+│ ┌─── DEFENDER ─────────────────────────────────────────┐ │
+│ │ [Similar structure] │ │
+│ └────────────────────────────────────────────────────────┘ │
+│ │
+│ [ ▶️ START SIMULATION ] [💾 Save Setup] [📂 Load] │
+└─────────────────────────────────────────────────────────────┘
+IMAGEN DE UNIDADES:
+               * Ruta: /assets/units/{nombre-unidad}.png
+               * Ejemplos: /assets/units/hoplita.png, /assets/units/gigante-vapor.png
+               * Tamaño recomendado: 32x32px o 48x48px
+               * Mostrar siempre la imagen junto al nombre de la unidad
+2. MODAL - AÑADIR UNIDAD:
+┌─────────────────────────────────────────┐
+│ Add Unit [✖️] │
+├─────────────────────────────────────────┤
+│ │
+│ Select Unit Type: │
+│ ┌─────────────────────────────────────┐ │
+│ │ [IMG] 🏛️ Hoplita │ │
+│ │ [IMG] ⚙️ Gigante a Vapor │ │
+│ │ [IMG] 🏹 Arquero │ │
+│ │ [IMG] 💣 Mortero │ │
+│ │ ... │ │
+│ └─────────────────────────────────────┘ │
+│ │
+│ Quantity: [______] (1-9999) │
+│ │
+│ Unit Stats Preview: │
+│ ┌─────────────────────────────────────┐ │
+│ │ [IMG] Hoplita │ │
+│ │ HP: 56 | Armor: 1 | Damage: 18 │ │
+│ │ Size: 1 | Ammo: ∞ │ │
+│ └─────────────────────────────────────┘ │
+│ │
+│ [ Add ] [ Cancel ] │
+└─────────────────────────────────────────┘
+3. PANTALLA - SIMULACIÓN EN TIEMPO REAL:
+┌─────────────────────────────────────────────────────────────┐
+│ BATTLE IN PROGRESS... Round 3 / 100 │
+├─────────────────────────────────────────────────────────────┤
+│ │
+│ ┌─── ATTACKER ─────────────────────────────────────────┐ │
+│ │ Units Alive: 545 / 580 [████████████░░░░] 94% │ │
+│ │ Damage Dealt: 15,420 │ │
+│ │ Damage Received: 12,380 │ │
+│ │ │ │
+│ │ [IMG] Hoplita: 465 / 500 │ │
+│ │ [IMG] Gigante Vapor: 50 / 50 │ │
+│ │ [IMG] Mortero: 30 / 30 │ │
+│ └────────────────────────────────────────────────────────┘ │
+│ │
+│ ⚔️ VS │
+│ │
+│ ┌─── DEFENDER ─────────────────────────────────────────┐ │
+│ │ Units Alive: 658 / 720 [███████████░░░] 91% │ │
+│ │ [Similar structure] │ │
+│ └────────────────────────────────────────────────────────┘ │
+│ │
+│ Round Log: │
+│ ┌────────────────────────────────────────────────────────┐ │
+│ │ [Round 3] Anti-Air attacks Bombers: 340 damage │ │
+│ │ [Round 3] Artillery attacks FirstLine: 2,850 damage │ │
+│ │ [Round 3] Defender lost 42 Hoplites │ │
+│ └────────────────────────────────────────────────────────┘ │
+│ │
+│ [ ⏸️ Pause ] [ ⏭️ Next Round ] [ ⏩ Finish ] │
+└─────────────────────────────────────────────────────────────┘
+4. PANTALLA - REPORTE FINAL:
+┌─────────────────────────────────────────────────────────────┐
+│ BATTLE REPORT #12345 │
+│ Date: 2025-11-23 | Duration: 8 rounds │
+├─────────────────────────────────────────────────────────────┤
+│ │
+│ 🏆 WINNER: ATTACKER │
+│ │
+│ ┌─── STATISTICS ──────────────────────────────────────┐ │
+│ │ │ │
+│ │ ATTACKER DEFENDER │ │
+│ │ ───────── ───────── │ │
+│ │ Initial: 580 Initial: 720 │ │
+│ │ Surviving: 445 (76.7%) Surviving: 0 (0%) │ │
+│ │ Reserve: 50 (8.6%) Reserve: 120 (16.7%)│ │
+│ │ Casualties: 85 (14.7%) Casualties: 600 (83.3%)│ │
+│ │ │ │
+│ │ Damage Dealt: 98,450 │ │
+│ │ Damage Received: 72,330 │ │
+│ │ Efficiency: 1.36x │ │
+│ └───────────────────────────────────────────────────────┘ │
+│ │
+│ Detailed Breakdown by Unit: │
+│ ┌────────────────────────────────────────────────────────┐ │
+│ │ Unit Type │ Initial │ Final │ Casualties │ Damage │ │
+│ ├────────────────────────────────────────────────────────┤ │
+│ │ [IMG] Hoplita│ 500 │ 445 │ 55 │ 32,450 │ │
+│ │ [IMG] Gigante│ 50 │ 50 │ 0 │ 48,220 │ │
+│ │ [IMG] Mortero│ 30 │ 0 │ 30* │ 17,780 │ │
+│ └────────────────────────────────────────────────────────┘ │
+│ *Out of ammunition - moved to reserve │
+│ │
+│ Round-by-Round Analysis: │
+│ [Table with detailed stats per round] │
+│ │
+│ [ 💾 Export TXT ] [ 💾 Export JSON ] [ 💾 Export HTML ] │
+│ [ 🔄 New Battle ] [ 📋 Copy Setup ] │
+└─────────────────────────────────────────────────────────────┘
+💻 IMPLEMENTACIÓN TÉCNICA
+1. Framework y Stack:
+               * HTML5 + CSS3 (vanilla o con framework ligero como Alpine.js)
+               * JavaScript ES6+ (sin dependencias pesadas si es posible)
+               * Estructura modular con Web Components o módulos ES6
+2. State Management:
+class BattleState {
+constructor() {
+this.config = {
+battleType: 'terrestrial',
+level: 25,
+attacker: { units: new Map(), upgrades: 0, hephaestus: 0 },
+defender: { units: new Map(), upgrades: 0, hephaestus: 0 }
+};
+this.simulation = null;
+this.observers = [];
+}
+// Observer pattern para actualizar UI
+subscribe(observer) { this.observers.push(observer); }
+notify(event) { this.observers.forEach(o => o.update(event)); }
+}
+3. Componentes Reutilizables:
+// UnitCard Component
+class UnitCard extends HTMLElement {
+connectedCallback() {
+const unitName = this.getAttribute('unit-name');
+const unitCount = this.getAttribute('count');
+const unitImage = /assets/units/${unitName}.png;
+this.innerHTML = `
+ <div class="card-game unit-card">
+   <img src="${unitImage}" alt="${unitName}" class="unit-icon">
+   <span class="unit-name">${unitName}</span>
+   <span class="unit-count">x ${unitCount}</span>
+   <button class="btn-game btn-sm" onclick="editUnit('${unitName}')">✏️</button>
+   <button class="btn-game btn-sm" onclick="removeUnit('${unitName}')">🗑️</button>
+ </div>
+`;
+
+}
+}
+customElements.define('unit-card', UnitCard);
+4. Visualización de Batalla:
+class BattlefieldVisualization {
+renderBattlefield(battlefield, side) {
+const container = document.getElementById(${side}-battlefield);
+for (const [lineType, line] of battlefield.getLines(side)) {
+ const lineDiv = document.createElement('div');
+ lineDiv.className = 'battle-line';
+ 
+ // Mostrar unidades con sus imágenes
+ for (const unit of line.getAllAliveUnits()) {
+   const unitImg = document.createElement('img');
+   unitImg.src = `/assets/units/${unit.name}.png`;
+   unitImg.className = 'unit-icon-small';
+   unitImg.title = `${unit.name} - HP: ${unit.currentHP}`;
+   lineDiv.appendChild(unitImg);
+ }
+ 
+ container.appendChild(lineDiv);
+}
+
+}
+}
+5. Sistema de Presets:
+const PRESETS = {
+'basic-attack': {
+name: 'Basic Attack',
+attacker: {
+units: { 'hoplita': 500, 'arquero': 300, 'mortero': 20 },
+upgrades: 2,
+hephaestus: 0
+}
+},
+'naval-assault': {
+name: 'Naval Assault',
+attacker: {
+units: { 'barco-lanzallamas': 47, 'barco-espolon-vapor': 315 },
+upgrades: 3,
+hephaestus: 5
+}
+}
+};
+function loadPreset(presetId) {
+const preset = PRESETS[presetId];
+state.config.attacker = { ...preset.attacker };
+updateUI();
+}
+6. Exportación de Reportes:
+class ReportExporter {
+exportAsJSON(report) {
+const json = JSON.stringify(report, null, 2);
+this.downloadFile(json, 'battle-report.json', 'application/json');
+}
+exportAsHTML(report) {
+const html = <!DOCTYPE html> <html> <head> <title>Battle Report</title> <style>${this.getReportStyles()}</style> </head> <body> ${this.generateHTMLReport(report)} </body> </html>;
+this.downloadFile(html, 'battle-report.html', 'text/html');
+}
+downloadFile(content, filename, mimeType) {
+const blob = new Blob([content], { type: mimeType });
+const url = URL.createObjectURL(blob);
+const a = document.createElement('a');
+a.href = url;
+a.download = filename;
+a.click();
+URL.revokeObjectURL(url);
+}
+}
+7. Validación en Tiempo Real:
+class InputValidator {
+validateUnitCount(input) {
+const value = parseInt(input.value);
+const errorMsg = input.nextElementSibling;
+if (isNaN(value) || value < 1 || value > 9999) {
+ input.classList.add('input-error');
+ errorMsg.textContent = 'Must be between 1 and 9999';
+ return false;
+}
+
+input.classList.remove('input-error');
+errorMsg.textContent = '';
+return true;
+
+}
+}
+8. Animaciones y Transiciones:
+.unit-card {
+transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.unit-card:hover {
+transform: translateY(-2px);
+box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+.battle-progress {
+animation: pulse 1s ease-in-out infinite;
+}
+@keyframes pulse {
+0%, 100% { opacity: 1; }
+50% { opacity: 0.7; }
+}
+🎯 FUNCIONALIDADES CLAVE
+1. Drag & Drop para Unidades:
+               * Arrastrar unidades desde panel de selección a composición
+               * Reordenar unidades dentro de la composición
+               * Visual feedback durante drag
+2. Tooltips Informativos:
+               * Hover sobre unidad muestra stats completas (con imagen)
+               * Hover sobre stats muestra cálculos (ej: "24 base + 6 mejora + 5 Hefesto = 35")
+               * Tooltips con bordes dorados estilo Ikariam
+3. Configuración Rápida:
+               * Presets de ejércitos comunes
+               * Botón "Mirror" para copiar composición atacante a defensor
+               * "Clear All" para resetear
+               * "Randomize" para generar ejército aleatorio
+4. Modo Paso a Paso:
+               * Botón "Next Round" para avanzar ronda por ronda
+               * Destacar ataques en tiempo real
+               * Log de eventos con timestamps
+5. Persistencia:
+               * Auto-save en localStorage
+               * Botón "Save Configuration" con nombre personalizado
+               * Lista de configuraciones guardadas
+6. Responsive Design:
+               * Layout adaptable a móviles y tablets
+               * Menú hamburguesa en pantallas pequeñas
+               * Cards apiladas en móvil, grid en desktop
+               2. Implementar modo interactivo:
+// Flujo interactivo:
+Welcome to Ikariam Battle Simulator!
+? Select battle type: (Use arrow keys)
+❯ Terrestrial
+Maritime
+? Enter city/port level: (1-50) 25
+? Configure attacker composition:
+? Add unit type: (Use arrow keys)
+❯ Hoplite
+Steam Giant
+Archer
+Mortar
+[Done]
+? How many Hoplites? 500
+? Add another unit? (Y/n) Y
+[... configurar más unidades ...]
+? Configure defender composition:
+[... mismo proceso ...]
+? Attacker upgrades level: (0-3) 2
+? Defender upgrades level: (0-3) 1
+? Attacker Hephaestus level: (0-5) 5
+? Defender Hephaestus level: (0-5) 0
+Configuration complete!
+Attacker: 580 units (Level 25 terrestrial)
+               * 500 Hoplites (Upgrade 2, Hephaestus 5)
+               * 50 Steam Giants (Upgrade 2, Hephaestus 5)
+               * 30 Mortars (Upgrade 2, Hephaestus 5)
+Defender: 720 units (Level 25 terrestrial)
+               * 400 Hoplites (Upgrade 1)
+               * 300 Swordsmen (Upgrade 1)
+               * 20 Catapults (Upgrade 1)
+________________
+
+
+? Ready to simulate? (Y/n) Y
+Running simulation...
+[========================================] 100%
+Simulation complete!
+Winner: ATTACKER (8 rounds)
+? View detailed report? (Y/n) Y
+[... mostrar reporte ...]
+? Export report? (Y/n) Y
+? Select format:
+❯ Text (.txt)
+JSON (.json)
+HTML (.html)
+? File name: battle_report_001
+Report saved to: ./battle_report_001.txt
+? Run another simulation? (Y/n) N
+Thank you for using Ikariam Battle Simulator!
+               3. Implementar visualización de progreso:
+class BattleVisualizer {
+displayProgress(round: RoundReport, totalRounds: number): void {
+console.log(\n=== Round ${round.roundNumber}/${totalRounds} ===);
+console.log(Attacker: ${round.attackerStats.unitsAtEnd} units alive);
+console.log(Defender: ${round.defenderStats.unitsAtEnd} units alive);
+console.log(Damage dealt: A: ${round.attackerStats.damageDealt} | D: ${round.defenderStats.damageDealt});
+}
+displayBattlefield(battlefield: Battlefield, side: 'attacker' | 'defender'): void {
+// Visualización ASCII del campo de batalla
+console.log(\n${side.toUpperCase()} BATTLEFIELD:);
+console.log('┌─────────────────────────────────────┐');
+for (const [lineType, line] of battlefield.getLines(side)) {
+ const aliveUnits = line.getTotalAliveUnits();
+ const maxUnits = line.getTotalCapacity();
+ const bar = this.createProgressBar(aliveUnits, maxUnits);
+ console.log(`│ ${lineType.padEnd(15)} ${bar} │`);
+}
+
+console.log('└─────────────────────────────────────┘');
+
+}
+createProgressBar(current: number, max: number, length: number = 20): string {
+const filled = Math.floor((current / max) * length);
+const empty = length - filled;
+return '█'.repeat(filled) + '░'.repeat(empty) + ${current}/${max};
+}
+}
+               4. Implementar validación de entrada:
+class InputValidator {
+validateBattleType(type: string): boolean {
+return ['terrestrial', 'maritime'].includes(type);
+}
+validateLevel(level: number, battleType: string): boolean {
+// Niveles válidos según tipo
+if (battleType === 'terrestrial') {
+return level >= 1 && level <= 66;
+} else {
+return level >= 0 && level <= 50;
+}
+}
+validateUnitComposition(composition: Map<UnitType, number>, battleType: string): ValidationResult {
+// Verificar que todas las unidades sean del tipo correcto
+for (const [unitType, count] of composition) {
+const unit = unitFactory.getUnitInfo(unitType);
+if (unit.battleType !== battleType) {
+return { valid: false, error: Unit ${unitType} is not valid for ${battleType} battles };
+}
+if (count <= 0) {
+return { valid: false, error: Unit count must be positive };
+}
+}
+return { valid: true };
+}
+}
+               5. Implementar archivos de configuración:
+// attacker.json
+{
+"units": {
+"hoplita": 500,
+"gigante-vapor": 50,
+"mortero": 30,
+"arquero": 200,
+"girocoptero": 50
+},
+"upgrades": 2,
+"hephaestus": 5
+}
+// defender.json
+{
+"units": {
+"hoplita": 400,
+"espadachin": 300,
+"catapulta": 20,
+"arquero": 150
+},
+"upgrades": 1,
+"hephaestus": 0
+}
+🧪 TESTS REQUERIDOS
+Tests Funcionales:
+               1. Configurar batalla y validar state correcto
+               2. Añadir unidad muestra imagen correcta (/assets/units/{nombre}.png)
+               3. Validar que imágenes existen antes de renderizar
+               4. Validar tipos de batalla correctos
+               5. Validar rangos de nivel válidos
+               6. Cargar composición y mostrar imágenes de unidades
+               7. Validar unidades del tipo correcto para batalla
+               8. Simulación actualiza UI en tiempo real
+               9. Exportar reportes en todos los formatos
+               10. Presets cargan configuración correcta con imágenes
+Tests UI/UX:
+11. Responsive design funciona en mobile/tablet/desktop
+12. Tooltips muestran información correcta con imagen de unidad
+13. Animaciones son suaves y no bloquean UI
+14. Colores coinciden con paleta especificada
+15. Tipografía usa fuentes correctas
+16. Botones responden a hover/active
+17. Inputs validan en tiempo real
+Tests de Performance:
+18. Renderizar 50+ unidades diferentes < 100ms
+19. Simulación de 100 rondas no congela UI
+20. Exportar reporte grande < 1s
+21. localStorage funciona correctamente
+22. No memory leaks en simulaciones largas
+Tests de Imágenes:
+23. Verificar que todas las unidades tienen imagen en /assets/units/
+24. Fallback si imagen no existe (icono por defecto)
+25. Imágenes se cargan lazy cuando sea necesario
+26. Tamaño de imágenes optimizado (< 50KB por unidad)
+🏗️ ARQUITECTURA
+Patrón de Diseño:
+               * MVC/MVVM: Separación de lógica y presentación
+               * Observer Pattern: Para actualizar UI cuando cambia state
+               * Component Pattern: Web Components reutilizables (UnitCard, BattleVisualization)
+               * Strategy Pattern: Diferentes renders según tipo de batalla
+               * Factory Pattern: Crear instancias de componentes dinámicamente
+Estructura del Proyecto:
+/src
+/components
+- unit-card.js (componente con imagen de unidad)
+- battlefield-view.js
+- stats-panel.js
+/services
+- battle-simulator.js
+- report-exporter.js
+/state
+- battle-state.js
+/utils
+- validator.js
+- image-loader.js (maneja carga de imágenes de unidades)
+/styles
+- theme.css (colores y tipografía Ikariam)
+- components.css
+/assets
+/units (⭐ CARPETA CON IMÁGENES)
+- hoplita.png
+- gigante-vapor.png
+- arquero.png
+- ... (todas las unidades)
+/icons
+- settings.svg
+- export.svg
+Gestión de Imágenes de Unidades:
+// Image Loader Service
+class UnitImageLoader {
+constructor() {
+this.imageCache = new Map();
+this.basePath = '/assets/units/';
+}
+// Precargar imágenes al inicio
+async preloadUnitImages(unitNames) {
+const promises = unitNames.map(name => this.loadImage(name));
+await Promise.all(promises);
+}
+// Cargar imagen individual
+async loadImage(unitName) {
+if (this.imageCache.has(unitName)) {
+return this.imageCache.get(unitName);
+}
+const imagePath = `${this.basePath}${unitName}.png`;
+
+try {
+ const img = new Image();
+ img.src = imagePath;
+ await img.decode(); // Esperar a que cargue
+ this.imageCache.set(unitName, imagePath);
+ return imagePath;
+} catch (error) {
+ console.warn(`Image not found for ${unitName}, using fallback`);
+ return this.getFallbackImage();
+}
+
+}
+// Imagen por defecto si falta alguna
+getFallbackImage() {
+return '/assets/units/default-unit.png';
+}
+// Verificar si imagen existe
+imageExists(unitName) {
+return this.imageCache.has(unitName);
+}
+}
+📦 ENTREGABLES
+               1. Código HTML/CSS/JS:
+               * index.html - Estructura principal
+               * styles/theme.css - Paleta de colores Ikariam
+               * styles/components.css - Estilos de componentes
+               * src/app.js - Lógica principal
+               * src/components/ - Componentes reutilizables
+               * src/services/image-loader.js - ⭐ Manejo de imágenes de unidades
+               2. Assets:
+               * /assets/units/ - ⭐ Carpeta con imágenes de todas las unidades
+               * /assets/icons/ - Iconos de UI
+               * /assets/fonts/ - Fuentes (si no se usan CDN)
+               3. Tests:
+               * tests/unit/ - Tests unitarios de componentes
+               * tests/integration/ - Tests de flujo completo
+               * tests/visual/ - Tests de regresión visual
+               4. Documentación:
+               * README.md - Instalación y uso
+               * DESIGN.md - Guía de estilos y componentes
+               * API.md - Documentación de API interna
+               * ASSETS.md - ⭐ Listado de imágenes de unidades requeridas
+               5. Demo:
+               * Video/GIF mostrando interfaz completa con imágenes de unidades
+               * Screenshots de cada pantalla
+               * Demo interactiva en GitHub Pages
+📋 CHECKLIST DE IMÁGENES DE UNIDADES
+Verificar que existen imágenes para:
+Terrestres:
+               * [ ] /assets/units/hoplita.png
+               * [ ] /assets/units/gigante-vapor.png
+               * [ ] /assets/units/espadachin.png
+               * [ ] /assets/units/lancero.png
+               * [ ] /assets/units/hondero.png
+               * [ ] /assets/units/arquero.png
+               * [ ] /assets/units/fusilero.png
+               * [ ] /assets/units/ariete.png
+               * [ ] /assets/units/catapulta.png
+               * [ ] /assets/units/mortero.png
+               * [ ] /assets/units/girocoptero.png
+               * [ ] /assets/units/bombardero.png
+Marítimas:
+               * [ ] /assets/units/barco-lanzallamas.png
+               * [ ] /assets/units/barco-espolon-vapor.png
+               * [ ] /assets/units/barco-espolon-comun.png
+               * [ ] /assets/units/barco-ballesta.png
+               * [ ] /assets/units/barco-catapulta.png
+               * [ ] /assets/units/barco-mortero.png
+               * [ ] /assets/units/barco-lanzamisiles.png
+               * [ ] /assets/units/submarino.png
+               * [ ] /assets/units/lancha-palas.png
+               * [ ] /assets/units/barco-portaglobos.png
+Imagen por defecto:
+               * [ ] /assets/units/default-unit.png (fallback)
+🎨 ESPECIFICACIONES DE IMÁGENES
+Formato:
+               * PNG con transparencia
+               * 48x48px recomendado (o 32x32px, 64x64px)
+               * Fondo transparente
+               * Peso < 50KB por imagen
+Estilo:
+               * Icónicos y reconocibles
+               * Colores consistentes con paleta Ikariam
+               * Bordes suaves
+               * Estilo 2D isométrico (si es posible)
+________________
+
+
+7. Criterios de Aceptación y QA
+7.1 Criterios Generales de Calidad
+Cobertura de Tests:
+               * Cobertura mínima: 85%
+               * Tests unitarios: 90%+
+               * Tests de integración: 80%+
+               * Tests end-to-end: 70%+
+Calidad de Código:
+               * Sin errores de lint
+               * Cumple estándares de formateo
+               * Complejidad ciclomática < 10 por función
+               * Funciones < 50 líneas
+               * Clases < 300 líneas
+               * Documentación de funciones públicas
+Rendimiento:
+               * Simulación de batalla 100v100: < 1 segundo
+               * Simulación de batalla 500v500: < 5 segundos
+               * Generación de reporte: < 500ms
+               * Uso de memoria: < 500MB para batallas grandes
+7.2 Criterios de Aceptación por Fase
+Fase 1: Módulo de Unidades
+Criterios de Aceptación:
+               1. AC-1.1: Todas las unidades de unidades.json se cargan correctamente
+               * Verificación: Factory crea 23 tipos de unidades sin errores
+               * Test: test_load_all_units_from_json()
+               2. AC-1.2: Estadísticas base se asignan correctamente
+               * Verificación: HP, armadura, daño, tamaño, munición coinciden con JSON
+               * Test: test_unit_base_stats() para cada tipo
+               3. AC-1.3: Mejoras se aplican correctamente
+               * Verificación: Mejora nivel 1, 2, 3 incrementan daño y armadura
+               * Test: test_unit_upgrades() para hoplita, gigante, mortero
+               4. AC-1.4: Hefesto nivel 5 aplica +20 armadura y +15% daño
+               * Verificación: Gigante con Hefesto 5 tiene armadura 23 y daño 48.3
+               * Test: test_hephaestus_bonus()
+               5. AC-1.5: takeDamage() reduce HP correctamente
+               * Verificación: Hoplita con 56 HP recibe 30 daño → HP = 26
+               * Test: test_take_damage()
+               6. AC-1.6: Unidades mueren cuando HP <= 0
+               * Verificación: isAlive() retorna false cuando HP <= 0
+               * Test: test_unit_death()
+               7. AC-1.7: Munición se consume correctamente y unidad va a reserva
+               * Verificación: Arquero (3 munición) puede atacar 3 veces, luego se retira a reserva
+               * Test: test_ammunition_consumption_and_reserve()
+               8. AC-1.8: Unidades en reserva no participan en combate
+               * Verificación: Unidad en reserva no puede atacar ni ser atacada
+               * Test: test_unit_in_reserve()
+Proceso de QA:
+               1. Ejecutar suite de tests: npm test -- unit/units
+               2. Verificar cobertura: npm run coverage
+               3. Validar con datos reales de JSON
+               4. Probar casos límite: HP=0, munición=0, mejora nivel 3
+               5. Verificar tipos TypeScript: npm run type-check
+Fase 2: Campo de Batalla
+Criterios de Aceptación:
+               1. AC-2.1: Campos de batalla se crean según nivel correcto
+               * Verificación: Nivel 1-4 terrestre tiene 3 slots primera línea
+               * Test: test_battlefield_configuration_by_level()
+               2. AC-2.2: Slots tienen capacidad correcta
+               * Verificación: Slot nivel 25+ terrestre primera línea = 50 puntos
+               * Test: test_slot_capacity()
+               3. AC-2.3: Unidades se distribuyen según prioridad
+               * Verificación: Hoplitas llenan slots antes que Gigantes a Vapor
+               * Test: test_unit_distribution_priority()
+               4. AC-2.4: Algoritmo respeta tamaño de unidades
+               * Verificación: Slot de 30 puntos acepta máximo 6 gigantes (tamaño 5) o 30 hoplitas (tamaño 1)
+               * Test: test_unit_size_constraints()
+               5. AC-2.5: Slots se llenan completamente antes de pasar al siguiente
+               * Verificación: Con 200 hoplitas en 7 slots de 30, cada slot tiene ~28-30 hoplitas
+               * Test: test_slot_filling_order()
+               6. AC-2.6: Líneas cargan prioridades de ataque correctamente
+               * Verificación: Primera línea ataca a primera línea enemiga primero
+               * Test: test_attack_priorities_loading()
+Proceso de QA:
+               1. Ejecutar tests de distribución: npm test -- integration/battlefield
+               2. Visualizar distribución con diferentes composiciones
+               3. Probar con todos los niveles de campo (1-50)
+               4. Validar con composiciones extremas: solo gigantes, solo hoplitas
+               5. Verificar memoria: no memory leaks en distribución masiva
+Fase 3: Sistema de Daño
+Criterios de Aceptación:
+               1. AC-3.1: Fórmula de daño es correcta: MAX(0, daño - armadura)
+               * Verificación: 50 daño - 10 armadura = 40 daño efectivo
+               * Test: test_damage_calculation()
+               2. AC-3.2: Daño no puede ser negativo
+               * Verificación: 10 daño - 20 armadura = 0 daño
+               * Test: test_negative_damage_prevented()
+               3. AC-3.3: Munición infinita funciona correctamente
+               * Verificación: Hoplita (munición null) puede atacar 1000 veces
+               * Test: test_unlimited_ammunition()
+               4. AC-3.4: Munición limitada se agota y unidad va a reserva
+               * Verificación: Arquero (3 munición) se retira a reserva después de 3 ataques
+               * Test: test_limited_ammunition_reserve()
+4.1. AC-3.4.1: Unidades en reserva no son seleccionadas como objetivos
+               * Verificación: Si todos los arqueros están en reserva, selector busca otro objetivo
+               * Test: test_reserve_units_not_targeted()
+               5. AC-3.5: Selector de objetivos respeta prioridades
+               * Verificación: Bombarderos atacan artillería antes que primera línea
+               * Test: test_target_priority_selection()
+               6. AC-3.6: Si objetivo prioritario muerto, selecciona siguiente
+               * Verificación: Con artillería muerta, bombarderos atacan luchadores distancia
+               * Test: test_fallback_target_selection()
+               7. AC-3.7: Orden de ataque es correcto (1-6)
+               * Verificación: AttackSequencer retorna [AntiAir, Bombers, Artillery, Ranged, FirstLine, Flanks]
+               * Test: test_attack_sequence_order()
+               8. AC-3.8: Overkill damage se calcula correctamente
+               * Verificación: 50 daño vs 30 HP genera 20 overkill
+               * Test: test_overkill_damage()
+Proceso de QA:
+               1. Tests unitarios de cálculo: npm test -- unit/damage
+               2. Validar con ejemplos de batallas reales de Ikariam
+               3. Probar todos los tipos de unidades atacando todos los tipos
+               4. Verificar transición entre objetivos cuando prioritario muere
+               5. Benchmark de rendimiento: 10000 cálculos de daño < 100ms
+Fase 4: Motor de Combate
+Criterios de Aceptación:
+               1. AC-4.1: Ronda ejecuta ataques en orden correcto (1-6)
+               * Verificación: Anti-aérea ataca primero, flancos último
+               * Test: test_round_attack_order()
+               2. AC-4.2: Todas las líneas activas atacan en cada ronda
+               * Verificación: Con 6 líneas activas, se registran ataques de todas
+               * Test: test_all_lines_attack()
+               3. AC-4.3: Unidades muertas no atacan en siguiente ronda
+               * Verificación: Si hoplita muere en ronda 1, no ataca en ronda 2
+               * Test: test_dead_units_dont_attack()
+               4. AC-4.4: Batalla termina cuando un bando es eliminado
+               * Verificación: Cuando defensor tiene 0 unidades, atacante gana
+               * Test: test_victory_condition_elimination()
+               5. AC-4.5: Batalla termina con empate si alcanza límite de rondas
+               * Verificación: Si llega a 100 rondas con ambos vivos, winner = 'draw'
+               * Test: test_max_rounds_draw()
+               6. AC-4.6: Estadísticas de ronda son precisas
+               * Verificación: Daño total de ronda = suma de todos los ataques
+               * Test: test_round_statistics_accuracy()
+6.1. AC-4.6.1: Unidades retiradas a reserva se contabilizan correctamente
+               * Verificación: Reporte muestra unidades en reserva separadamente de bajas
+               * Test: test_reserve_units_statistics()
+               7. AC-4.7: Batalla simple produce ganador correcto
+               * Verificación: 10 hoplitas vs 5 hoplitas → atacante gana
+               * Test: test_simple_battle_outcome()
+               8. AC-4.8: Batalla compleja multi-línea funciona
+               * Verificación: Ejército completo (6 líneas) vs defensor completo
+               * Test: test_complex_multi_line_battle()
+Proceso de QA:
+               1. Tests de integración: npm test -- integration/combat
+               2. Ejecutar 100 batallas de diferentes configuraciones
+               3. Validar que ganador es consistente con lógica esperada
+               4. Verificar que estadísticas cuadran (daño dealt = daño received total)
+               5. Probar casos extremos: 1v1000, batalla sin artillería, etc.
+               6. Benchmark: Batalla 500v500 completa < 5 segundos
+Fase 5: Mecánicas Especiales
+Criterios de Aceptación:
+               1. AC-5.1: Daño compartido se activa con umbral correcto
+               * Verificación: 30+ portaglobos activan daño compartido, 29 no
+               * Test: test_shared_damage_threshold_portaglobos()
+               2. AC-5.2: Daño compartido se activa para Espolones a Vapor con 80+
+               * Verificación: 80+ espolones activan daño compartido, 79 no
+               * Test: test_shared_damage_threshold_steam_rams()
+               3. AC-5.3: Daño se distribuye equitativamente entre unidades
+               * Verificación: 36 portaglobos reciben 360 daño → 10 daño cada uno
+               * Test: test_shared_damage_distribution()
+               4. AC-5.4: Portaglobos con agrupación sobreviven más rondas
+               * Verificación: 42 portaglobos duran 5 rondas sin pérdidas según fuente
+               * Test: test_portaglobos_survival_rounds()
+               5. AC-5.5: Sin agrupación, primera unidad recibe todo el daño
+               * Verificación: 20 portaglobos sin compartir, primera unidad muere de un golpe fuerte
+               * Test: test_no_shared_damage_single_target()
+               6. AC-5.6: Espolones a Vapor agrupados tienen mejor ratio de supervivencia
+               * Verificación: 100 espolones con compartir vs 100 sin compartir → mejor supervivencia con compartir
+               * Test: test_steam_rams_survival_comparison()
+               7. AC-5.7: Otras unidades no se ven afectadas por daño compartido
+               * Verificación: Hoplitas nunca activan daño compartido
+               * Test: test_no_shared_damage_for_other_units()
+Proceso de QA:
+               1. Tests específicos: npm test -- unit/shared-damage
+               2. Comparar resultados con fuentes de comunidad de Ikariam
+               3. Validar umbrales exactos (30 para portaglobos, 80 para espolones)
+               4. Ejecutar batallas de prueba: 42 portaglobos vs artillería enemiga
+               5. Análisis estadístico: 100 batallas y calcular ratio de supervivencia
+               6. Documentar diferencia de comportamiento con/sin agrupación
+Fase 6: Sistema de Reportes
+Criterios de Aceptación:
+               1. AC-6.1: Reporte contiene todas las secciones requeridas
+               * Verificación: Configuración, rondas, estadísticas, resultado
+               * Test: test_report_structure_completeness()
+               2. AC-6.2: Estadísticas totales coinciden con suma de rondas
+               * Verificación: daño_total = sum(daño_ronda_i para i en todas las rondas)
+               * Test: test_statistics_accuracy()
+               3. AC-6.3: Damage efficiency se calcula correctamente
+               * Verificación: efficiency = daño_dealt / daño_received
+               * Test: test_damage_efficiency_calculation()
+               4. AC-6.4: Casualty rate es preciso
+               * Verificación: casualty_rate = (inicial - final) / inicial × 100
+               * Test: test_casualty_rate_calculation()
+               5. AC-6.5: Top damage dealer se identifica correctamente
+               * Verificación: En batalla con morteros, mortero es top dealer
+               * Test: test_top_damage_dealer_identification()
+               6. AC-6.6: Reporte JSON es válido y parseable
+               * Verificación: JSON.parse(report.generateJSONReport()) funciona
+               * Test: test_json_report_validity()
+               7. AC-6.7: Reporte de texto es legible y formateado
+               * Verificación: Contiene headers, secciones claras, números formateados
+               * Test: test_text_report_formatting()
+               8. AC-6.8: Exportación a archivo funciona correctamente
+               * Verificación: Archivo se crea con contenido correcto
+               * Test: test_export_to_file()
+Proceso de QA:
+               1. Tests de reportes: npm test -- unit/reporting
+               2. Generar reportes de batallas reales y verificar manualmente
+               3. Comparar formato con reportes oficiales de Ikariam
+               4. Validar JSON con JSONLint
+               5. Verificar que reportes HTML renderizan correctamente en navegador
+               6. Probar exportación a diferentes formatos
+               7. Verificar tamaño de archivos: reportes grandes < 10MB
+Fase 7: Interfaz CLI
+Criterios de Aceptación:
+               1. AC-7.1: Comandos CLI se parsean correctamente
+               * Verificación: ikariam-sim simulate --type terrestrial funciona
+               * Test: test_cli_command_parsing()
+               2. AC-7.2: Validación de entrada rechaza valores inválidos
+               * Verificación: Nivel -1 o nivel 100 genera error
+               * Test: test_input_validation()
+               3. AC-7.3: Archivos JSON de composición se cargan correctamente
+               * Verificación: --attacker-file ./attacker.json carga unidades
+               * Test: test_load_composition_from_file()
+               4. AC-7.4: Modo interactivo funciona correctamente
+               * Verificación: Flujo completo de configuración sin errores
+               * Test: test_interactive_mode() (con mocks de inquirer)
+               5. AC-7.5: Visualización de progreso es clara
+               * Verificación: Barras de progreso, contadores de unidades visibles
+               * Test: test_battle_visualization()
+               6. AC-7.6: Exportación de reporte desde CLI funciona
+               * Verificación: --output report.txt --format text crea archivo
+               * Test: test_cli_report_export()
+               7. AC-7.7: Mensajes de error son claros y útiles
+               * Verificación: Error de nivel inválido muestra rango correcto
+               * Test: test_error_messages_clarity()
+Proceso de QA:
+               1. Tests de CLI: npm test -- integration/cli
+               2. Prueba manual de todos los comandos
+               3. Ejecutar en diferentes terminales (Bash, Zsh, PowerShell)
+               4. Verificar autocompletado si está implementado
+               5. Probar con entradas edge case: valores límite, strings vacíos
+               6. Verificar experiencia de usuario: claridad, fluidez
+               7. Documentar todos los comandos con ejemplos en README
+Fase 8: Optimización y Testing Final
+Criterios de Aceptación:
+               1. AC-8.1: Cobertura de tests > 85%
+               * Verificación: npm run coverage muestra > 85%
+               * Herramienta: Istanbul/nyc
+               2. AC-8.2: No errores de lint
+               * Verificación: npm run lint retorna 0 errores
+               * Herramienta: ESLint
+               3. AC-8.3: Todos los tests pasan
+               * Verificación: npm test 100% success
+               * Resultado: 0 fallos, 0 skipped
+               4. AC-8.4: Rendimiento cumple objetivos
+               * Verificación: Benchmark de batallas estándar
+               * Test: test_performance_benchmark()
+               * Objetivo: 100v100 < 1s, 500v500 < 5s
+               5. AC-8.5: Sin memory leaks
+               * Verificación: Ejecutar 1000 simulaciones consecutivas
+               * Herramienta: Node.js --inspect + Chrome DevTools
+               * Objetivo: Memoria estable < 500MB
+               6. AC-8.6: Documentación completa
+               * Verificación: README, API docs, comentarios de código
+               * Herramienta: TSDoc o JSDoc
+               * Objetivo: 100% funciones públicas documentadas
+               7. AC-8.7: CI/CD pipeline funcional
+               * Verificación: GitHub Actions ejecuta tests en cada commit
+               * Resultado: Badge "passing" en README
+Proceso de QA:
+               1. Ejecutar suite completa: npm test
+               2. Análisis de cobertura: npm run coverage
+               3. Lint: npm run lint
+               4. Type check: npm run type-check
+               5. Benchmark: npm run benchmark
+               6. Memory profiling: node --inspect index.js
+               7. Review manual de código: seguir checklist de calidad
+               8. Documentación: verificar completitud y claridad
+               9. CI/CD: verificar pipeline pasa en GitHub/GitLab
+7.3 Checklist de QA Final
+Antes de considerar el proyecto completo, verificar:
+Funcionalidad:
+               * [ ] Todas las unidades de unidades.json funcionan correctamente
+               * [ ] Todos los niveles de campos.json generan campos correctos
+               * [ ] Todas las prioridades de lineas.json se aplican
+               * [ ] Daño compartido funciona para Portaglobos y Espolones a Vapor
+               * [ ] Sistema de munición funciona correctamente
+               * [ ] Mejoras de unidades se aplican
+               * [ ] Bonificaciones de Hefesto se aplican
+               * [ ] Orden de ataque (1-6) se respeta
+               * [ ] Prioridades de objetivo se respetan
+               * [ ] Condiciones de victoria funcionan
+               * [ ] Reportes se generan correctamente
+               * [ ] CLI funciona en modo batch e interactivo
+Calidad:
+               * [ ] Cobertura de tests > 85%
+               * [ ] Sin errores de lint
+               * [ ] Sin warnings de TypeScript
+               * [ ] Sin memory leaks detectados
+               * [ ] Rendimiento cumple objetivos
+               * [ ] Documentación completa
+               * [ ] README con ejemplos claros
+               * [ ] CI/CD pipeline pasando
+Validación con Fuentes:
+               * [ ] 42 Portaglobos duran ~5 rondas como esperado
+               * [ ] Espolones a Vapor con 80+ tienen mejor ratio
+               * [ ] Fórmula de daño coincide con mecánicas de Ikariam
+               * [ ] Distribución de unidades coincide con juego
+               * [ ] Orden de ataque coincide con comportamiento observado
+Experiencia de Usuario:
+               * [ ] CLI es intuitiva y fácil de usar
+               * [ ] Mensajes de error son claros
+               * [ ] Reportes son legibles
+               * [ ] Ejemplos de uso funcionan
+               * [ ] Instalación es simple
+________________
+
+
+Referencias
+[1] Ikariam Forum - Battle System Math. Retrieved from https://forum.ikariam.gameforge.com/forum/thread/100738-battle-system-math-number-of-units-to-survive-round-1/
+[2] Guía Flotero Maestro de Batallas por Fur1on. Retrieved from https://forum.ikariam.gameforge.com/forum/thread/64709-guia-flotero-maestro-de-batallas-por-fur1on/
+[3] Ikariam Forum - Guía Flotero, sección Espolones a Vapor.
+[4] Ikariam Kings - Art of Warfare. Retrieved from https://ikariamkings101.weebly.com/art-of-warfare.html
+[5] YouTube - Ikariam Land Battles Part 1. Retrieved from https://www.youtube.com/watch?v=vuEjm5_3Khk
+[6] Ikariam Kings - Military Units. Retrieved from https://ikariamkings101.weebly.com/military-units.html
+[7] Guía Flotero - Sección Ataque Activo con Espolones a Vapor.
+[8] Guía Flotero - Sección Portaglobos y FvsSF.
+[9] Guía Flotero - Composiciones de Ataque Estándar.
+[10] Ikariam Fandom - Ares' Stronghold. Retrieved from https://ikariam.fandom.com/wiki/Ares'_Stronghold
+________________
+
+
+Apéndices
+Apéndice A: Glosario de Términos
+               * HP (Hit Points): Puntos de vida de una unidad
+               * Armadura: Reducción de daño recibido
+               * Daño: Daño base infligido por una unidad
+               * Tamaño: Espacio que ocupa una unidad en un slot
+               * Munición: Número de ataques que puede realizar una unidad antes de retirarse a la reserva
+               * Reserva: Estado de unidades sin munición que ya no participan en el combate
+               * Slot: Espacio en una línea de batalla que puede contener unidades
+               * Línea de Batalla: Agrupación de unidades por función (primera línea, flancos, etc.)
+               * Orden de Ataque: Secuencia en que las líneas atacan (1-6)
+               * Prioridad de Ataque: Objetivos preferidos de cada línea
+               * Hefesto: Mejora de fragua que aumenta stats de unidades
+               * Daño Compartido: Mecánica especial de Portaglobos y Espolones a Vapor
+Apéndice B: Fórmulas Matemáticas
+Daño Efectivo:
+Daño_Efectivo = MAX(0, Daño_Atacante - Armadura_Defensor)
+Armadura con Mejoras y Hefesto:
+Armadura_Total = Armadura_Base + Armadura_Mejora[nivel] + Bonus_Hefesto_Armadura
+Daño con Mejoras y Hefesto:
+Daño_Total = (Daño_Base + Daño_Mejora[nivel]) × (1 + Bonus_Hefesto_Daño_Porcentaje)
+Daño Compartido:
+Si Cantidad_Unidades >= Umbral_Mínimo:
+Daño_Por_Unidad = Daño_Total_Recibido / Cantidad_Unidades
+Sino:
+Daño_Por_Unidad = Daño_Total_Recibido (a primera unidad)
+Damage Efficiency:
+Eficiencia = Daño_Infligido / Daño_Recibido
+Casualty Rate:
+Tasa_Bajas = (Unidades_Iniciales - Unidades_Supervivientes) / Unidades_Iniciales × 100
+Apéndice C: Ejemplos de Cálculo
+Ejemplo 1: Cálculo de Daño Básico
+Atacante: Hoplita (nivel base)
+               * Daño: 18
+               * Armadura: 1
+Defensor: Hoplita (nivel base)
+               * HP: 56
+               * Armadura: 1
+Cálculo:
+Daño_Efectivo = MAX(0, 18 - 1) = 17
+HP_Resultante = 56 - 17 = 39
+Ejemplo 2: Hoplita con Mejora 3 y Hefesto 5
+Stats base:
+               * Daño: 18
+               * Armadura: 1
+Con Mejora 3:
+               * Daño: 18 + (24 - 18) = 24
+               * Armadura: 1 + (7 - 1) = 7
+Con Hefesto 5 (+20 armadura, +15% daño):
+               * Daño: 24 × 1.15 = 27.6
+               * Armadura: 7 + 20 = 27
+Ejemplo 3: Daño Compartido - Portaglobos
+Escenario: 36 Portaglobos (HP: 140 cada uno) reciben ataque de 5 morteros navales
+Cálculo sin daño compartido:
+Mortero: Daño = 69 - 0 (armadura portaglobos) = 69
+Daño_Total = 5 × 69 = 345
+Primera unidad: HP = 140 - 345 = -205 (muere)
+Resultado: 1 portaglobo muerto, 35 supervivientes
+Cálculo con daño compartido (36 >= 30):
+Daño_Por_Unidad = 345 / 36 = 9.58
+Cada portaglobo: HP = 140 - 9.58 = 130.42
+Resultado: 0 portaglobos muertos, 36 supervivientes
+Ejemplo 4: Distribución en Slots
+Campo: Nivel 25 terrestre (Primera Línea: 7 slots × 50 capacidad)
+Unidades disponibles:
+               * 200 Hoplitas (tamaño 1)
+               * 50 Gigantes a Vapor (tamaño 3)
+Prioridad: 1. Hoplita, 2. Gigante a Vapor
+Distribución:
+Slot 1: 50 Hoplitas (50/50)
+Slot 2: 50 Hoplitas (50/50)
+Slot 3: 50 Hoplitas (50/50)
+Slot 4: 50 Hoplitas (50/50)
+Slot 5: 16 Gigantes a Vapor (48/50) + no caben más gigantes
+Slot 6: 17 Gigantes a Vapor (51/50) - excede por 1, se ajusta a 16 (48/50)
+Slot 7: 17 Gigantes a Vapor (51/50) - excede, se ajusta a 16 (48/50)
+Total distribuido: 200 Hoplitas + 48 Gigantes a Vapor
+No distribuido: 2 Gigantes a Vapor (no caben)
+________________
+
+
+FIN DEL DOCUMENTO
