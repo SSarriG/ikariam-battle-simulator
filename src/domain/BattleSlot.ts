@@ -6,7 +6,7 @@ export class BattleSlot {
     public renumberId: number = 0;
     public deadUnitsThisRound: Unit[] = []; // Track actual dead units
 
-    constructor(public readonly capacity: number) { }
+    constructor(public capacity: number) { }
 
     get units(): Unit[] {
         return [...this._units];

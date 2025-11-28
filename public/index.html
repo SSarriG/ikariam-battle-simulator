@@ -22,8 +22,20 @@
                     <option value="maritime">⚓ Maritime</option>
                 </select>
 
-                <label>Level:</label>
-                <input type="number" id="level" class="input-game" value="25" min="1" max="66">
+                <!-- Terrestrial Configuration -->
+                <div id="terrestrial-config" class="config-group">
+                    <label>Town Hall Level:</label>
+                    <input type="number" id="townHallLevel" class="input-game" value="25" min="1" max="66">
+
+                    <label>Wall Level:</label>
+                    <input type="number" id="wallLevel" class="input-game" value="0" min="0" max="48">
+                </div>
+
+                <!-- Maritime Configuration -->
+                <div id="maritime-config" class="config-group" style="display: none;">
+                    <label>Port Level:</label>
+                    <input type="number" id="portLevel" class="input-game" value="20" min="1" max="66">
+                </div>
             </div>
 
             <!-- Attacker Configuration -->
@@ -213,8 +225,8 @@
         </div>
     </div>
 
-    <script src="scripts/battlefieldMatrix.js"></script>
-    <script src="dist/bundle.js?v=modal_fix_v1"></script>
+    <script src="scripts/battlefieldMatrix.js?v=dynamic_field_v26"></script>
+    <script src="dist/bundle_v36.js"></script>
 </body>
 
 </html>

@@ -13,7 +13,8 @@ export interface SideConfiguration {
 
 export interface BattleConfiguration {
     battleType: BattleType;
-    level: number;
+    level1: number;
+    level2: number;
     attacker: SideConfiguration;
     defender: SideConfiguration;
 }

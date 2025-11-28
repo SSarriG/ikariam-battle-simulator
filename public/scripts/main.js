@@ -1,8 +1,11 @@
 // Main UI Controller
+console.log('Bundle execution started');
 import { BattleSimulationUseCase } from '../../src/application/BattleSimulationUseCase';
 import { StepBattleSimulationUseCase } from '../../src/application/StepBattleSimulationUseCase';
 import { LocalStorageRepository } from '../../src/infrastructure/LocalStorageRepository';
 import { BattleType } from '../../src/domain/enums';
+
+console.log('Imports completed');
 
 const TERRESTRIAL_UNITS = [
     { value: 'hoplita', label: 'Hoplita' },
@@ -57,12 +60,25 @@ const MARITIME_UNITS = [
 
 class BattleSimulatorApp {
     constructor() {
-        this.useCase = new BattleSimulationUseCase();
-        this.stepUseCase = new StepBattleSimulationUseCase();
-        this.repository = new LocalStorageRepository();
-        this.currentReport = null;
-        this.stepMode = false; // Track if we're in step-by-step mode
-        this.battlefieldMatrix = new window.BattlefieldMatrix(); // Battlefield visualization
+        console.log('BattleSimulatorApp constructor started');
+        try {
+            this.useCase = new BattleSimulationUseCase();
+            console.log('BattleSimulationUseCase initialized');
+            this.stepUseCase = new StepBattleSimulationUseCase();
+            console.log('StepBattleSimulationUseCase initialized');
+            this.repository = new LocalStorageRepository();
+            this.currentReport = null;
+            this.stepMode = false; // Track if we're in step-by-step mode
+
+            if (window.BattlefieldMatrix) {
+                this.battlefieldMatrix = new window.BattlefieldMatrix(); // Battlefield visualization
+                console.log('BattlefieldMatrix initialized');
+            } else {
+                console.error('window.BattlefieldMatrix is undefined');
+            }
+        } catch (e) {
+            console.error('Error in constructor:', e);
+        }
 
         this.attackerUnits = [];
         this.defenderUnits = [];
@@ -83,10 +99,14 @@ class BattleSimulatorApp {
     }
 
     setupEventListeners() {
+        console.log('Setting up event listeners...');
         // Battle Type Change
         const battleTypeSelect = document.getElementById('battleType');
         if (battleTypeSelect) {
+            console.log('Found battleType select');
             battleTypeSelect.addEventListener('change', this.handleBattleTypeChange);
+        } else {
+            console.error('battleType select NOT found');
         }
 
         // Full battle button
@@ -116,12 +136,24 @@ class BattleSimulatorApp {
         // Add Unit buttons
         const addAttackerUnitBtn = document.getElementById('addAttackerUnitBtn');
         if (addAttackerUnitBtn) {
-            addAttackerUnitBtn.addEventListener('click', () => this.addUnit('attacker'));
+            console.log('Found addAttackerUnitBtn');
+            addAttackerUnitBtn.addEventListener('click', () => {
+                console.log('Clicked addAttackerUnitBtn');
+                this.addUnit('attacker');
+            });
+        } else {
+            console.error('addAttackerUnitBtn NOT found');
         }
 
         const addDefenderUnitBtn = document.getElementById('addDefenderUnitBtn');
         if (addDefenderUnitBtn) {
-            addDefenderUnitBtn.addEventListener('click', () => this.addUnit('defender'));
+            console.log('Found addDefenderUnitBtn');
+            addDefenderUnitBtn.addEventListener('click', () => {
+                console.log('Clicked addDefenderUnitBtn');
+                this.addUnit('defender');
+            });
+        } else {
+            console.error('addDefenderUnitBtn NOT found');
         }
 
         // Modal close button
@@ -144,6 +176,18 @@ class BattleSimulatorApp {
     }
 
     handleBattleTypeChange() {
+        const battleType = document.getElementById('battleType').value;
+        const terrestrialConfig = document.getElementById('terrestrial-config');
+        const maritimeConfig = document.getElementById('maritime-config');
+
+        if (battleType === 'terrestrial') {
+            terrestrialConfig.style.display = 'block';
+            maritimeConfig.style.display = 'none';
+        } else {
+            terrestrialConfig.style.display = 'none';
+            maritimeConfig.style.display = 'block';
+        }
+
         // Clear existing units as they might be incompatible
         this.attackerUnits = [];
         this.defenderUnits = [];
@@ -174,9 +218,10 @@ class BattleSimulatorApp {
         // Initialize battlefield matrix
         const battlefield = this.stepUseCase.getBattlefield();
         if (battlefield) {
+            // Pass effectiveLevel to initialize
             this.battlefieldMatrix.initialize(
                 config.battleType,
-                config.level,
+                battlefield.effectiveLevel,
                 battlefield.attackerLines,
                 battlefield.defenderLines
             );
@@ -265,47 +310,12 @@ class BattleSimulatorApp {
         const defenderInitial = this.defenderUnits.reduce((sum, u) => sum + u.quantity, 0);
 
         // Calculate Generals Lost
-        // We need to iterate over all initial units and check if they are dead
-        // Or better, iterate over battlefield units? No, dead units are removed.
-        // We can calculate it by comparing initial vs current, but we need to know WHICH units died to know the cost.
-        // The best way is to track it in the battlefield or calculate it from the report if available.
-        // Since we don't have a persistent "dead units" list easily accessible here without iterating everything,
-        // let's use the report if available, or calculate it by diffing initial vs current state if we can map them.
-
-        // Actually, we can just calculate it from the report if it exists, as it contains all units.
-        // But report might only be available after a round.
-        // Let's try to calculate it from the units we have.
-        // Wait, `this.attackerUnits` is the CONFIG, not the actual unit instances.
-        // The actual instances are in the battlefield (alive) or gone (dead).
-        // We need a way to track total casualties.
-        // The `Battlefield` class has `removeDeadUnits` but doesn't store them permanently in a "graveyard" list we can access here easily?
-        // Ah, `BattleSimulationUseCase` creates the battlefield.
-        // Let's look at `StepBattleSimulationUseCase`. It has `battlefield`.
-        // Does `Battlefield` track dead units? No, it removes them.
-        // BUT `BattleSlot` tracks `deathsThisRound`.
-        // To get TOTAL generals lost, we need to accumulate it.
-        // Let's add a property to `BattleSimulatorApp` to track accumulated generals lost.
-
-        // However, `updateLiveStatus` is called after `executeNextRound`.
-        // `executeNextRound` gets a `result` which has `report`.
-        // The `report` contains `attackerUnits` and `defenderUnits` which are ALL units (alive and dead) with their status!
-        // So we can use `this.currentReport` to calculate total generals lost accurately.
-
         let attackerGeneralsLost = 0;
         let defenderGeneralsLost = 0;
 
         if (this.currentReport) {
             this.currentReport.attackerUnits.forEach(u => {
                 if (!u.isAlive) {
-                    // We need the unit stats to know the cost. 
-                    // The report unit object might not have the stats directly, let's check BattleReport.ts
-                    // It has `name`. We can look up the cost in our unit map or if we have access to UnitFactory.
-                    // Or we can assume `u` is the Unit object itself?
-                    // In `BattleReport`, `attackerUnits` is `UnitReport[]`.
-                    // `UnitReport` has `name`, `initialHP`, `currentHP`, `isAlive`.
-                    // It does NOT have `generalsCost`.
-                    // We need to look it up.
-                    // We can use `this.getUnitCost(u.name)`.
                     attackerGeneralsLost += this.getUnitCost(u.name);
                 }
             });
@@ -336,17 +346,6 @@ class BattleSimulatorApp {
     }
 
     getUnitCost(unitName) {
-        // Helper to find cost. We can use the constants at the top of the file if we add cost there, 
-        // or we can fetch from UnitFactory if accessible. 
-        // Since we don't have easy access to UnitFactory static map from here without importing/initializing,
-        // and we already have the lists TERRESTRIAL_UNITS and MARITIME_UNITS but they don't have cost.
-        // Let's just use a hardcoded map here for simplicity as we just added the values to json.
-        // OR better, let's import the JSON data directly if possible? 
-        // We can't easily import json in browser context without build step support (which we have).
-        // Let's try to use the `UnitFactory` if we can. 
-        // But `UnitFactory` is in domain.
-        // Let's create a simple map here based on the user request values.
-
         const costs = {
             'hoplita': 1.4,
             'gigante-vapor': 6.2,
@@ -407,9 +406,20 @@ class BattleSimulatorApp {
         const battleTypeValue = document.getElementById('battleType').value;
         const battleType = battleTypeValue === 'maritime' ? BattleType.Maritime : BattleType.Terrestrial;
 
+        let level1, level2;
+
+        if (battleType === BattleType.Terrestrial) {
+            level1 = parseInt(document.getElementById('townHallLevel').value);
+            level2 = parseInt(document.getElementById('wallLevel').value);
+        } else {
+            level1 = parseInt(document.getElementById('portLevel').value);
+            level2 = 0; // No wall in maritime
+        }
+
         return {
             battleType,
-            level: parseInt(document.getElementById('level').value),
+            level1, // Town Hall or Port
+            level2, // Wall
             attacker: {
                 units: this.attackerUnits,
                 hephaestusLevel: parseInt(document.getElementById('attackerHephaestus').value)
@@ -488,14 +498,26 @@ class BattleSimulatorApp {
             return;
         }
 
-        const battleType = document.getElementById('battleType').value;
-        const level = parseInt(document.getElementById('level').value);
+        const battleTypeValue = document.getElementById('battleType').value;
+        const battleType = battleTypeValue === 'terrestrial' ? BattleType.Terrestrial : BattleType.Maritime;
+
+        let level1, level2;
+
+        if (battleType === BattleType.Terrestrial) {
+            level1 = parseInt(document.getElementById('townHallLevel').value);
+            level2 = parseInt(document.getElementById('wallLevel').value);
+        } else {
+            level1 = parseInt(document.getElementById('portLevel').value);
+            level2 = 0;
+        }
+
         const attackerHephaestus = parseInt(document.getElementById('attackerHephaestus').value);
         const defenderHephaestus = parseInt(document.getElementById('defenderHephaestus').value);
 
         const config = {
-            battleType: battleType === 'terrestrial' ? BattleType.Terrestrial : BattleType.Maritime,
-            level,
+            battleType,
+            level1,
+            level2,
             attacker: {
                 units: this.attackerUnits,
                 hephaestusLevel: attackerHephaestus
@@ -619,9 +641,21 @@ DEFENDER:
         const name = prompt('Enter configuration name:');
         if (!name) return;
 
+        const battleTypeValue = document.getElementById('battleType').value;
+        let level1, level2;
+
+        if (battleTypeValue === 'terrestrial') {
+            level1 = parseInt(document.getElementById('townHallLevel').value);
+            level2 = parseInt(document.getElementById('wallLevel').value);
+        } else {
+            level1 = parseInt(document.getElementById('portLevel').value);
+            level2 = 0;
+        }
+
         const config = {
-            battleType: document.getElementById('battleType').value,
-            level: parseInt(document.getElementById('level').value),
+            battleType: battleTypeValue,
+            level1,
+            level2,
             attacker: {
                 units: this.attackerUnits,
                 hephaestusLevel: parseInt(document.getElementById('attackerHephaestus').value)
@@ -654,7 +688,18 @@ DEFENDER:
 
         // Load config into UI
         document.getElementById('battleType').value = config.battleType;
-        document.getElementById('level').value = config.level;
+
+        // Trigger change event to update UI visibility
+        this.handleBattleTypeChange();
+
+        // Set levels based on type
+        if (config.battleType === 'terrestrial') {
+            document.getElementById('townHallLevel').value = config.level1 || 25;
+            document.getElementById('wallLevel').value = config.level2 || 0;
+        } else {
+            document.getElementById('portLevel').value = config.level1 || 20;
+        }
+
         document.getElementById('attackerHephaestus').value = config.attacker.hephaestusLevel;
         document.getElementById('defenderHephaestus').value = config.defender.hephaestusLevel;
 
@@ -674,6 +719,12 @@ DEFENDER:
         document.getElementById('config-screen').classList.remove('hidden');
         document.getElementById('report-screen').classList.add('hidden');
         this.currentReport = null;
+    }
+
+    displayReport(report) {
+        // Alias for showReport if needed, or implement if different
+        this.currentReport = report;
+        this.showReport();
     }
 }
 

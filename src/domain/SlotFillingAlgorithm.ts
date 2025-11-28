@@ -3,6 +3,8 @@ import { Unit } from './Unit';
 
 export class SlotFillingAlgorithm {
     static fill(line: BattleLine, availableUnits: Unit[]): void {
+        console.log(`[SlotFillingAlgorithm] Filling line ${line.lineType} with ${availableUnits.length} units. Reserves: ${line.reserves.length}`);
+
         // Group units by name for easier access
         const unitsMap = new Map<string, Unit[]>();
         availableUnits.forEach(unit => {
@@ -24,21 +26,33 @@ export class SlotFillingAlgorithm {
         });
 
         // Iterate over each slot
-        for (const slot of line.slots) {
+        line.slots.forEach((slot, index) => {
             // Iterate over unit priorities for this line
             for (const unitName of line.unitPositionPriorities) {
                 const units = unitsMap.get(unitName);
 
                 if (units && units.length > 0) {
+                    // Check if slot already has a Wall (Muro)
+                    const hasWall = slot.units.some(u => u.name === 'Muro' || u.name.startsWith('wall-'));
+                    if (hasWall) {
+                        // console.log(`[SlotFillingAlgorithm] Slot ${index} has Wall. Skipping.`);
+                        continue; // Skip this slot, it's taken by a Wall
+                    }
+
                     // Try to fill the slot with this unit type
+                    let addedCount = 0;
                     while (units.length > 0 && slot.remainingCapacity >= units[0].stats.size) {
                         const unit = units[0]; // Peek
                         if (slot.addUnit(unit)) {
                             unit.activate(); // Ensure unit is active (not in reserve)
                             units.shift(); // Remove from available if added
+                            addedCount++;
                         } else {
                             break; // Should not happen if check passed, but safety break
                         }
+                    }
+                    if (addedCount > 0) {
+                        console.log(`[SlotFillingAlgorithm] Added ${addedCount} ${unitName} to Slot ${index}`);
                     }
                 }
 
@@ -47,11 +61,12 @@ export class SlotFillingAlgorithm {
                     break;
                 }
             }
-        }
+        });
 
         // Add remaining units to reserves
-        unitsMap.forEach((units) => {
+        unitsMap.forEach((units, name) => {
             if (units.length > 0) {
+                console.log(`[SlotFillingAlgorithm] ${units.length} ${name} remaining. Sending to reserves.`);
                 units.forEach(u => u.sendToReserve());
                 line.reserves.push(...units);
             }

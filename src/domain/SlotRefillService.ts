@@ -76,5 +76,13 @@ export class SlotRefillService {
             // If we've placed all units, stop
             if (unitIndex >= sortedUnits.length) break;
         }
+
+        // Add any remaining units back to reserves
+        if (unitIndex < sortedUnits.length) {
+            const remainingUnits = sortedUnits.slice(unitIndex);
+            console.log(`[SlotRefillService] Returning ${remainingUnits.length} units to reserves (Capacity full).`);
+            remainingUnits.forEach(u => u.sendToReserve());
+            line.reserves.push(...remainingUnits);
+        }
     }
 }

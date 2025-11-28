@@ -6,15 +6,29 @@ import { SlotFillingAlgorithm } from './SlotFillingAlgorithm';
 import { BattleType, UnitType } from './enums';
 import { Unit } from './Unit';
 import lineasData from '../../data/lineas.json';
+import { WallService } from './WallService';
+import { WallUnit } from './WallUnit';
+import { GarrisonLimitService } from './GarrisonLimitService';
+import { UnitStats } from './UnitStats';
 
 export class BattlefieldFactory {
-    static createBattlefield(battleType: BattleType, level: number): Battlefield {
-        const config = BattlefieldConfiguration.getConfiguration(battleType, level);
+    static createBattlefield(battleType: BattleType, level1: number, level2: number): Battlefield {
+        const config = BattlefieldConfiguration.getConfiguration(battleType, level1);
 
         const attackerLines = this.createLines(config, battleType);
         const defenderLines = this.createLines(config, battleType);
 
-        return new Battlefield(battleType, level, attackerLines, defenderLines);
+        const battlefield = new Battlefield(battleType, level1, attackerLines, defenderLines);
+
+        // Calculate and set garrison limit
+        battlefield.garrisonLimit = GarrisonLimitService.calculateLimit(battleType, level1, level2);
+
+        // Add walls if terrestrial and wall level > 0
+        if (battleType === BattleType.Terrestrial && level2 > 0) {
+            this.addWalls(battlefield, level2);
+        }
+
+        return battlefield;
     }
 
     private static createLines(config: any, battleType: BattleType): Map<UnitType, BattleLine> {
@@ -70,11 +84,12 @@ export class BattlefieldFactory {
 
     static createBattlefieldWithUnits(
         battleType: BattleType,
-        level: number,
+        level1: number,
+        level2: number,
         attackerUnits: Unit[],
         defenderUnits: Unit[]
     ): Battlefield {
-        const battlefield = this.createBattlefield(battleType, level);
+        const battlefield = this.createBattlefield(battleType, level1, level2);
         this.distributeUnits(battlefield, attackerUnits, defenderUnits);
         return battlefield;
     }
@@ -98,5 +113,44 @@ export class BattlefieldFactory {
             const lineUnits = unitsByLine.get(lineType) || [];
             SlotFillingAlgorithm.fill(line, lineUnits);
         });
+    }
+
+    private static addWalls(battlefield: Battlefield, wallLevel: number): void {
+        const baseStats = WallService.getStats(wallLevel);
+        if (!baseStats) {
+            console.warn(`No stats found for Wall Level ${wallLevel}`);
+            return;
+        }
+        const wallCount = 7; // Fixed number of slots in first line
+
+        const firstLine = battlefield.defenderLines.get(UnitType.FirstLine);
+        if (!firstLine) return;
+
+        for (let i = 0; i < wallCount && i < firstLine.slots.length; i++) {
+            const slot = firstLine.slots[i];
+
+            // Create a new UnitStats instance with size = slot.capacity to ensure it fills the slot
+            const wallStats = new UnitStats(
+                baseStats.baseHP,
+                baseStats.baseArmor,
+                baseStats.baseDamage,
+                baseStats.accuracy,
+                slot.capacity, // Force size to fill slot
+                baseStats.ammunition,
+                baseStats.generalsCost,
+                baseStats.upgradeDamage,
+                baseStats.upgradeArmor
+            );
+
+            const wall = new WallUnit(`wall-${i}`, wallStats, wallLevel);
+
+            // Check if slot has units and move them to reserves
+            if (slot.units.length > 0) {
+                firstLine.reserves.push(...slot.units);
+                slot.replaceUnits([]);
+            }
+
+            slot.addUnit(wall);
+        }
     }
 }

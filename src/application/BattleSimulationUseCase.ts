@@ -39,7 +39,8 @@ export class BattleSimulationUseCase {
         // Create battlefield with units
         const battlefield = BattlefieldFactory.createBattlefieldWithUnits(
             config.battleType,
-            config.level,
+            config.level1,
+            config.level2,
             attackerUnits,
             defenderUnits
         );

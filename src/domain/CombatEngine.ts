@@ -15,6 +15,9 @@ import { DamageQueue } from './DamageQueue';
 import { SlotFillingAlgorithm } from './SlotFillingAlgorithm';
 import { BattleStatus, Winner, UnitType } from './enums';
 import { Unit } from './Unit';
+import { FieldSizeService } from './FieldSizeService';
+import { BattlefieldConfiguration } from './BattlefieldConfiguration';
+import { BattleSlot } from './BattleSlot';
 
 export class CombatEngine {
     private battlefield: Battlefield;
@@ -28,6 +31,7 @@ export class CombatEngine {
         this.battlefield = battlefield;
         this.statistics = new BattleStatistics();
         this.initializeStatistics();
+        this.resizeBattlefield();
     }
 
     private initializeStatistics(): void {
@@ -97,6 +101,9 @@ export class CombatEngine {
     }
 
     private processRound(): void {
+        // Check for battlefield resizing (Garrison Limit)
+        this.resizeBattlefield();
+
         // Clear round statistics from previous round
         const clearStats = (line: any) => {
             line.slots.forEach((slot: any) => slot.clearRoundStats());
@@ -201,8 +208,10 @@ export class CombatEngine {
     }
 
     private refillSlotsFromReserves(): void {
+        console.log('[CombatEngine] Refilling slots from reserves...');
         const refillLine = (line: any) => {
             if (line.reserves.length > 0) {
+                console.log(`[CombatEngine] Line ${line.lineType} has ${line.reserves.length} reserves. Attempting to fill slots.`);
                 // Take all reserves
                 const availableReserves = [...line.reserves];
                 // Clear reserves temporarily
@@ -307,6 +316,96 @@ export class CombatEngine {
         } else {
             return Winner.Draw;
         }
+    }
+
+    private resizeBattlefield(): void {
+        const defenderUnitsCount = this.countAliveUnits('defender');
+        const isLimitExceeded = FieldSizeService.isGarrisonLimitExceeded(defenderUnitsCount, this.battlefield.garrisonLimit);
+
+        // Always check on first run or if state changes
+        if (this.currentRound === 0 || isLimitExceeded !== this.battlefield.isGarrisonLimitExceeded) {
+            console.log(`Resizing battlefield. Limit Exceeded: ${isLimitExceeded} (Units: ${defenderUnitsCount}, Limit: ${this.battlefield.garrisonLimit})`);
+
+            this.battlefield.isGarrisonLimitExceeded = isLimitExceeded;
+
+            let targetLevel: number;
+
+            if (isLimitExceeded) {
+                this.battlefield.deactivateWalls();
+                targetLevel = 50; // Force max size (Open Field)
+            } else {
+                this.battlefield.activateWalls();
+                targetLevel = this.battlefield.effectiveLevel;
+            }
+
+            const newConfig = BattlefieldConfiguration.getConfiguration(this.battlefield.battleType, targetLevel);
+            this.applyConfigToLines(newConfig);
+        }
+    }
+
+    private countAliveUnits(side: 'attacker' | 'defender'): number {
+        let count = 0;
+        const lines = side === 'attacker' ? this.battlefield.attackerLines : this.battlefield.defenderLines;
+        lines.forEach(line => {
+            count += line.getAllAliveUnits().length;
+            count += line.reserves.length;
+        });
+        return count;
+    }
+
+    private applyConfigToLines(config: Record<UnitType, any>): void {
+        console.log('[CombatEngine] Applying new configuration to lines...');
+        const updateLines = (lines: Map<UnitType, any>, side: string) => {
+            lines.forEach((line, lineType) => {
+                const slotConfig = config[lineType];
+                if (!slotConfig) return;
+
+                const newNumSlots = slotConfig['num-huecos'];
+                const newCapacity = slotConfig['tamano-por-hueco'];
+
+                console.log(`[CombatEngine] Resizing ${side} ${lineType}: Slots ${line.slots.length} -> ${newNumSlots}, Capacity -> ${newCapacity}`);
+
+                // Update capacity for all existing slots
+                line.slots.forEach((slot: any, index: number) => {
+                    const oldCapacity = slot.capacity;
+                    slot.capacity = newCapacity;
+
+                    // If units exceed new capacity, move excess to reserves
+                    // Note: slot.units returns a copy, so we must use replaceUnits to update the slot
+                    const currentUnits = slot.units;
+                    if (currentUnits.length > newCapacity) {
+                        const excess = currentUnits.splice(newCapacity);
+                        // Update slot with remaining units
+                        slot.replaceUnits(currentUnits);
+
+                        console.log(`[CombatEngine] Slot ${index} overflow: Moving ${excess.length} units to reserves.`);
+                        line.reserves.push(...excess);
+                    }
+                });
+
+                // Resize slots array
+                if (line.slots.length < newNumSlots) {
+                    // Add new slots
+                    console.log(`[CombatEngine] Adding ${newNumSlots - line.slots.length} new slots to ${lineType}`);
+                    for (let i = line.slots.length; i < newNumSlots; i++) {
+                        line.slots.push(new BattleSlot(newCapacity));
+                    }
+                } else if (line.slots.length > newNumSlots) {
+                    // Remove slots and move units to reserves
+                    const removedSlots = line.slots.splice(newNumSlots);
+                    console.log(`[CombatEngine] Removing ${removedSlots.length} slots from ${lineType}. Moving units to reserves.`);
+                    removedSlots.forEach((slot: any) => {
+                        if (slot.units.length > 0) {
+                            console.log(`[CombatEngine] Moving ${slot.units.length} units from removed slot to reserves.`);
+                            line.reserves.push(...slot.units);
+                        }
+                    });
+                }
+            });
+        };
+
+        updateLines(this.battlefield.attackerLines, 'attacker');
+        updateLines(this.battlefield.defenderLines, 'defender');
     }
 
     private generateReport(): BattleReport {
