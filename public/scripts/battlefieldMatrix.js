@@ -23,19 +23,35 @@ class BattlefieldMatrix {
     }
 
     /**
-     * Load field configuration from campos.json
+     * Load field configuration from embedded data (matching campos.json)
      */
     loadFieldConfig(battleType, cityLevel) {
-        // This will be populated from campos.json
-        // For now, using the largest config (level 25+)
-        this.fieldConfig = {
-            'primera-linea': { numSlots: 7, capacity: 50 },
-            'luchadores-distancia': { numSlots: 7, capacity: 50 },
-            'flancos': { numSlots: 6, capacity: 40 },
-            'artilleria': { numSlots: 5, capacity: 30 },
-            'bombarderos': { numSlots: 2, capacity: 30 },
-            'anti-aerea': { numSlots: 2, capacity: 30 }
+        // Embedded campos.json data
+        const camposData = {
+            "terrestre": [
+                { min: 1, max: 4, config: { "primera-linea": 3, "luchadores-distancia": 3, "flancos": 0, "artilleria": 1, "bombarderos": 1, "anti-aerea": 1 } },
+                { min: 5, max: 9, config: { "primera-linea": 5, "luchadores-distancia": 5, "flancos": 2, "artilleria": 2, "bombarderos": 1, "anti-aerea": 1 } },
+                { min: 10, max: 16, config: { "primera-linea": 7, "luchadores-distancia": 7, "flancos": 4, "artilleria": 3, "bombarderos": 1, "anti-aerea": 1 } },
+                { min: 17, max: 24, config: { "primera-linea": 7, "luchadores-distancia": 7, "flancos": 6, "artilleria": 4, "bombarderos": 2, "anti-aerea": 2 } },
+                { min: 25, max: 100, config: { "primera-linea": 7, "luchadores-distancia": 7, "flancos": 6, "artilleria": 5, "bombarderos": 2, "anti-aerea": 2 } }
+            ],
+            "maritima": [
+                { min: 0, max: 7, config: { "primera-linea": 3, "luchadores-distancia": 3, "flancos": 0, "artilleria": 1, "bombarderos": 1, "anti-aerea": 1 } },
+                { min: 8, max: 14, config: { "primera-linea": 5, "luchadores-distancia": 5, "flancos": 2, "artilleria": 2, "bombarderos": 1, "anti-aerea": 1 } },
+                { min: 15, max: 21, config: { "primera-linea": 7, "luchadores-distancia": 7, "flancos": 4, "artilleria": 3, "bombarderos": 1, "anti-aerea": 1 } },
+                { min: 22, max: 28, config: { "primera-linea": 7, "luchadores-distancia": 7, "flancos": 6, "artilleria": 4, "bombarderos": 2, "anti-aerea": 2 } },
+                { min: 29, max: 100, config: { "primera-linea": 7, "luchadores-distancia": 7, "flancos": 6, "artilleria": 5, "bombarderos": 2, "anti-aerea": 2 } }
+            ]
         };
+
+        const typeData = camposData[battleType] || camposData['terrestre'];
+        const levelConfig = typeData.find(c => cityLevel >= c.min && cityLevel <= c.max) || typeData[typeData.length - 1];
+
+        // Transform to expected format
+        this.fieldConfig = {};
+        for (const [key, num] of Object.entries(levelConfig.config)) {
+            this.fieldConfig[key] = { numSlots: num };
+        }
     }
 
     /**
@@ -79,49 +95,58 @@ class BattlefieldMatrix {
         const config = this.fieldConfig[lineType];
         if (!config) return null;
 
+        const numSlots = config.numSlots;
+        const centerCol = 6;
+
         switch (lineType) {
             case 'primera-linea':
-                // Row 2, centered (columns 3-9 for 7 slots)
+                // Row 2, centered
+                // Start col = center - floor(numSlots/2)
                 return {
                     row: 2,
-                    col: 3 + slotIndex
+                    col: (centerCol - Math.floor(numSlots / 2)) + slotIndex
                 };
 
             case 'luchadores-distancia':
-                // Row 1, centered (columns 3-9 for 7 slots)
+                // Row 1, centered
                 return {
                     row: 1,
-                    col: 3 + slotIndex
+                    col: (centerCol - Math.floor(numSlots / 2)) + slotIndex
+                };
+
+            case 'artilleria':
+                // Row 0, centered
+                return {
+                    row: 0,
+                    col: (centerCol - Math.floor(numSlots / 2)) + slotIndex
                 };
 
             case 'flancos':
-                // Row 2, split left (0-2) and right (10-12)
-                // First 3 slots on left, next 3 on right
-                if (slotIndex < 3) {
-                    return { row: 2, col: slotIndex };
+                // Row 2, alternating extremes
+                // Even indices (0, 2...) -> Left side: 0, 1, 2...
+                // Odd indices (1, 3...) -> Right side: 12, 11, 10...
+                if (slotIndex % 2 === 0) {
+                    return { row: 2, col: 0 + (slotIndex / 2) };
                 } else {
-                    return { row: 2, col: 10 + (slotIndex - 3) };
+                    return { row: 2, col: 12 - Math.floor(slotIndex / 2) };
                 }
 
-            case 'artilleria':
-                // Row 0, centered (columns 4-8 for 5 slots)
-                return {
-                    row: 0,
-                    col: 4 + slotIndex
-                };
-
             case 'bombarderos':
-                // Row 0, left side (columns 0-1)
+                // Row 0, left side (0, 1...)
                 return {
                     row: 0,
                     col: slotIndex
                 };
 
             case 'anti-aerea':
-                // Row 0, right side (columns 11-12)
+                // Row 0, right side (12, 11...)
+                // Since filling order is Right->Left (0=Right, 1=Left relative to group),
+                // and we want them at the far right of the grid.
+                // Slot 0 (Rightmost) -> Col 12
+                // Slot 1 (Left of Rightmost) -> Col 11
                 return {
                     row: 0,
-                    col: 11 + slotIndex
+                    col: 12 - slotIndex
                 };
 
             default:

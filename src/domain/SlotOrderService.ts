@@ -13,15 +13,13 @@ export class SlotOrderService {
             case UnitType.Artillery:
                 return this.getCenterOutOrder(indices);
 
-            case UnitType.Flank:
             case UnitType.Bomber:
                 return this.getOutsideInOrder(indices);
 
+            case UnitType.Flank:
             case UnitType.AntiAir:
-                return this.getOutsideInRightFirstOrder(indices);
-
             default:
-                return indices; // Default left-to-right
+                return indices; // Default left-to-right (Natural order)
         }
     }
 
