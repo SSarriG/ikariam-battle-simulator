@@ -532,6 +532,225 @@ body {
     border: 1px solid #ff9999;
 }
 
+/* Modals */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(2px);
+}
+
+.modal-content {
+    position: relative;
+    background: #f8eebd;
+    border: 2px solid #b49f7b;
+    border-radius: 4px;
+    min-width: 400px;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    z-index: 1;
+}
+
+.modal-header {
+    background: linear-gradient(to bottom, #e0b57d, #d9a967);
+    border-bottom: 1px solid #b49f7b;
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #622d03;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 28px;
+    color: #622d03;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-close:hover {
+    color: #8b4513;
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.modal-body label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: #622d03;
+    margin-bottom: 8px;
+}
+
+.config-name-input {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 14px;
+    border: 1px solid #b49f7b;
+    border-radius: 2px;
+    background: #fff;
+    color: #622d03;
+    box-sizing: border-box;
+    margin-bottom: 20px;
+}
+
+.config-name-input:focus {
+    outline: none;
+    border-color: #8a7759;
+    box-shadow: 0 0 0 2px rgba(138, 119, 89, 0.2);
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.config-list {
+    max-height: 400px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.config-item {
+    border-radius: 2px;
+    padding: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.config-item:hover {
+    background: #fffef8;
+    border-color: #9d8a6b;
+    transform: translateX(4px);
+}
+
+.config-item-info {
+    flex: 1;
+}
+
+.config-item-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #622d03;
+    margin-bottom: 4px;
+}
+
+.config-item-date {
+    font-size: 11px;
+    color: #8b7355;
+}
+
+.config-item-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.config-item-btn {
+    padding: 4px 12px;
+    font-size: 11px;
+    border: 1px solid #b49f7b;
+    background: linear-gradient(to bottom, #f8e7b3, #eacd8b);
+    color: #643d20;
+    border-radius: 2px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.config-item-btn:hover {
+    background: linear-gradient(to bottom, #ffefc5, #f0d89d);
+}
+
+.config-item-btn.delete {
+    background: linear-gradient(to bottom, #f88, #e66);
+    color: #fff;
+    border-color: #c44;
+}
+
+.config-item-btn.delete:hover {
+    background: linear-gradient(to bottom, #faa, #f88);
+}
+
+.config-list:empty::before {
+    content: 'No hay configuraciones guardadas';
+    display: block;
+    text-align: center;
+    padding: 40px;
+    color: #8b7355;
+    font-style: italic;
+}
+
+
+/* Notification Toast */
+.notification-toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    min-width: 300px;
+    max-width: 400px;
+    transform: translateX(450px);
+    transition: transform 0.3s ease-in-out;
+}
+
+.notification-toast.show {
+    transform: translateX(0);
+}
+
+.toast-content {
+    background: linear-gradient(to bottom, #e0b57d, #d9a967);
+    border: 2px solid #b49f7b;
+    border-radius: 4px;
+    padding: 16px 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.toast-content span {
+    font-size: 14px;
+    font-weight: 600;
+    color: #622d03;
+    display: block;
+    text-align: center;
+}
+
 .hidden {
     display: none !important;
 }

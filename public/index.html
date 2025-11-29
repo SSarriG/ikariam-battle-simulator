@@ -183,9 +183,9 @@
 
         <!-- Action Bar -->
         <div class="action-bar">
-            <button class="btn-action" onclick="app.saveConfig()">Guardar configuración</button>
-            <button class="btn-action" onclick="app.loadConfig()">Cargar configuración</button>
-            <button class="btn-primary-ikariam" onclick="app.runSimulation()">
+            <button type="button" class="btn-action" onclick="app.saveConfig()">Guardar configuración</button>
+            <button type="button" class="btn-action" onclick="app.loadConfig()">Cargar configuración</button>
+            <button type="button" class="btn-primary-ikariam" onclick="app.runSimulation()">
                 <div class="btn-inner">Empezar batalla</div>
             </button>
         </div>
@@ -207,6 +207,50 @@
     </div>
 
     <script src="scripts/battlefieldMatrix.js"></script>
+    <!-- Save Config Modal -->
+    <div id="save-modal" class="modal hidden">
+        <div class="modal-overlay" onclick="app.closeSaveModal()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Guardar Configuración</h3>
+                <button type="button" class="modal-close" onclick="app.closeSaveModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <label for="config-name">Nombre de la configuración:</label>
+                <input type="text" id="config-name" class="config-name-input" placeholder="Ej: Ataque 100 hoplitas">
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" onclick="app.closeSaveModal()">
+                        <div class="btn-inner">Cancelar</div>
+                    </button>
+                    <button type="button" class="btn-action" onclick="app.confirmSaveConfig()">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Config Modal -->
+    <div id="load-modal" class="modal hidden">
+        <div class="modal-overlay" onclick="app.closeLoadModal()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Cargar Configuración</h3>
+                <button type="button" class="modal-close" onclick="app.closeLoadModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="config-list" class="config-list">
+                    <!-- Configurations will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="notification-toast" class="notification-toast hidden">
+        <div class="toast-content">
+            <span id="toast-message"></span>
+        </div>
+    </div>
+
     <script src="dist/bundle_v36.js"></script>
 </body>
 

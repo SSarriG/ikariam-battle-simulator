@@ -379,17 +379,75 @@ class BattleSimulatorApp {
         };
     }
 
+    showNotification(message) {
+        const toast = document.getElementById('notification-toast');
+        const messageSpan = document.getElementById('toast-message');
+
+        messageSpan.textContent = message;
+        toast.classList.remove('hidden');
+
+        // Trigger animation
+        setTimeout(() => {
+            toast.classList.add('show');
+        }, 10);
+
+        // Hide after 3 seconds
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 300);
+        }, 3000);
+    }
+
+    // Save Config Modal Methods
     saveConfig() {
+        const modal = document.getElementById('save-modal');
+        const input = document.getElementById('config-name');
+        input.value = '';
+        modal.classList.remove('hidden');
+        input.focus();
+    }
+
+    closeSaveModal() {
+        const modal = document.getElementById('save-modal');
+        modal.classList.add('hidden');
+    }
+
+    confirmSaveConfig() {
+        const nameInput = document.getElementById('config-name');
+        const name = nameInput.value.trim();
+
+        if (!name) {
+            this.showNotification('⚠ Debes ingresar un nombre');
+            return;
+        }
+
         const config = {
+            name: name,
+            date: new Date().toISOString(),
             battleType: this.currentBattleType,
             townHall: document.getElementById('townHallLevel').value,
             wall: document.getElementById('wallLevel').value,
             port: document.getElementById('portLevel').value,
+            attackerHephaestus: document.getElementById('attacker-hephaestus').value,
+            defenderHephaestus: document.getElementById('defender-hephaestus').value,
             attacker: this.getGridState('attacker-grid'),
             defender: this.getGridState('defender-grid')
         };
-        localStorage.setItem('battleConfig', JSON.stringify(config));
-        alert('Configuration saved!');
+
+        // Get existing configs
+        const configs = this.getSavedConfigs();
+        configs.push(config);
+        localStorage.setItem('battleConfigs', JSON.stringify(configs));
+
+        this.closeSaveModal();
+        this.showNotification(`✓ Configuración "${name}" guardada`);
+    }
+
+    getSavedConfigs() {
+        const saved = localStorage.getItem('battleConfigs');
+        return saved ? JSON.parse(saved) : [];
     }
 
     getGridState(gridId) {
@@ -407,21 +465,92 @@ class BattleSimulatorApp {
         return state;
     }
 
+    // Load Config Modal Methods
     loadConfig() {
-        const saved = localStorage.getItem('battleConfig');
-        if (!saved) {
-            alert('No saved configuration found');
+        const configs = this.getSavedConfigs();
+        if (configs.length === 0) {
+            this.showNotification('⚠ No hay configuraciones guardadas');
             return;
         }
-        const config = JSON.parse(saved);
+
+        const modal = document.getElementById('load-modal');
+        const list = document.getElementById('config-list');
+
+        list.innerHTML = configs.map((config, index) => {
+            const date = new Date(config.date);
+            const dateStr = date.toLocaleDateString('es-ES', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            return `
+                <div class="config-item">
+                    <div class="config-item-info">
+                        <div class="config-item-name">${config.name}</div>
+                        <div class="config-item-date">${dateStr} - ${config.battleType === 'terrestrial' ? 'Terrestre' : 'Marítima'}</div>
+                    </div>
+                    <div class="config-item-actions">
+                        <button type="button" class="config-item-btn" onclick="app.applyConfig(${index})">Cargar</button>
+                        <button type="button" class="config-item-btn delete" onclick="app.deleteConfig(${index}, event)">Eliminar</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        modal.classList.remove('hidden');
+    }
+
+    closeLoadModal() {
+        const modal = document.getElementById('load-modal');
+        modal.classList.add('hidden');
+    }
+
+    applyConfig(index) {
+        const configs = this.getSavedConfigs();
+        const config = configs[index];
+
+        if (!config) return;
 
         this.setBattleType(config.battleType);
         document.getElementById('townHallLevel').value = config.townHall || 25;
         document.getElementById('wallLevel').value = config.wall || 0;
         document.getElementById('portLevel').value = config.port || 20;
 
+        if (config.attackerHephaestus !== undefined) {
+            document.getElementById('attacker-hephaestus').value = config.attackerHephaestus;
+        }
+        if (config.defenderHephaestus !== undefined) {
+            document.getElementById('defender-hephaestus').value = config.defenderHephaestus;
+        }
+
         this.loadGridState('attacker-grid', config.attacker);
         this.loadGridState('defender-grid', config.defender);
+
+        this.updateMatrixPreview();
+        this.closeLoadModal();
+        this.showNotification(`✓ Configuración "${config.name}" cargada`);
+    }
+
+    deleteConfig(index, event) {
+        event.stopPropagation();
+
+        const configs = this.getSavedConfigs();
+        const configName = configs[index].name;
+
+        if (confirm(`¿Eliminar la configuración "${configName}"?`)) {
+            configs.splice(index, 1);
+            localStorage.setItem('battleConfigs', JSON.stringify(configs));
+            this.showNotification(`✓ Configuración "${configName}" eliminada`);
+
+            // Refresh the list
+            this.closeLoadModal();
+            if (configs.length > 0) {
+                setTimeout(() => this.loadConfig(), 100);
+            }
+        }
     }
 
     loadGridState(gridId, state) {
