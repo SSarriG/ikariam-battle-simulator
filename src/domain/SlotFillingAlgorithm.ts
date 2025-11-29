@@ -39,6 +39,12 @@ export class SlotFillingAlgorithm {
                         continue; // Skip this slot, it's taken by a Wall
                     }
 
+                    // Check if slot is occupied by a different unit type
+                    // We only allow filling if the slot is empty OR if it contains the SAME unit type
+                    if (!slot.isEmpty() && slot.units[0].name !== unitName) {
+                        continue;
+                    }
+
                     // Try to fill the slot with this unit type
                     let addedCount = 0;
                     while (units.length > 0 && slot.remainingCapacity >= units[0].stats.size) {
