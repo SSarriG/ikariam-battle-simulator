@@ -8,6 +8,9 @@ class BattlefieldMatrix {
         this.fieldConfig = null;
         this.attackerData = null;
         this.defenderData = null;
+        // Cache to remember last unit in each slot
+        // Format: { 'attacker-primera-linea-0': { name: 'hoplita', upgradeLevel: 2 }, ... }
+        this.slotHistory = {};
     }
 
     /**
@@ -189,18 +192,51 @@ class BattlefieldMatrix {
         const units = slotData.units;
         const deathsThisRound = slotData.deathsThisRound || 0;
 
-        // Show empty slot with death count if there were casualties
+        // Create unique key for this slot
+        const side = isDefender ? 'defender' : 'attacker';
+        const slotKey = `${side}-${lineType}-${slotIndex}`;
+
+        // Show slot with last unit image if units just died this round
         if (units.length === 0) {
-            cell.innerHTML = `
-                <div class="slot-container empty-slot">
-                    <div class="slot-upper">
-                        <div class="slot-visual"></div>
+            // If there were deaths this round and we have history, show the last known unit
+            const lastUnit = this.slotHistory[slotKey];
+            if (deathsThisRound > 0 && lastUnit) {
+                const unitName = lastUnit.name;
+                const upgradeLevel = lastUnit.upgradeLevel || 0;
+
+                const tooltipContent = `
+                    <strong>${unitName}</strong><br>
+                    Eliminadas todas las unidades<br>
+                    Nivel de mejora: ${upgradeLevel}
+                `.trim();
+
+                cell.innerHTML = `
+                    <div class="slot-container eliminated">
+                        <div class="slot-upper">
+                            <div class="slot-visual" style="background-image: url('/assets/units/${unitName}.png'); opacity: 1.0;"></div>
+                            <div class="bars-container">
+                                <div class="bar-vertical hp">
+                                    <div class="fill" style="height: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="counter-tag dead-only">0 <span class="deaths-round">(-${deathsThisRound})</span></div>
+                        <div class="tooltip">${tooltipContent}</div>
                     </div>
-                    ${(slotData.deadCount > 0 || deathsThisRound > 0) ?
-                    `<div class="counter-tag dead-only">0${deathsThisRound > 0 ? ` (-${deathsThisRound})` : ''}</div>`
-                    : ''}
-                </div>
-            `;
+                `;
+            } else {
+                // Regular empty slot
+                cell.innerHTML = `
+                    <div class="slot-container empty-slot">
+                        <div class="slot-upper">
+                            <div class="slot-visual"></div>
+                        </div>
+                        ${(slotData.deadCount > 0 || deathsThisRound > 0) ?
+                        `<div class="counter-tag dead-only">0${deathsThisRound > 0 ? ` (-${deathsThisRound})` : ''}</div>`
+                        : ''}
+                    </div>
+                `;
+            }
             return;
         }
 
@@ -208,6 +244,12 @@ class BattlefieldMatrix {
         const firstUnit = units[0];
         const unitName = firstUnit.name;
         const upgradeLevel = firstUnit.upgradeLevel || 0;
+
+        // Store in history cache for later use when slot becomes empty
+        this.slotHistory[slotKey] = {
+            name: unitName,
+            upgradeLevel: upgradeLevel
+        };
 
         // Calculate aggregate stats
         const totalHP = units.reduce((sum, u) => sum + u.currentHP, 0);
