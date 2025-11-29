@@ -6,226 +6,207 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ikariam Battle Simulator</title>
     <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/config.css">
     <link rel="stylesheet" href="styles/battlefieldMatrix.css">
 </head>
 
 <body>
-    <div class="container">
-        <h1>IKARIAM BATTLE SIMULATOR</h1>
+    <!-- Backgrounds -->
+    <div id="sky-bg"></div>
+    <div id="top-separator"></div>
 
-        <!-- Battle Configuration -->
-        <div id="config-screen">
-            <div class="config-row">
-                <label>Battle Type:</label>
-                <select id="battleType" class="input-game">
-                    <option value="terrestrial">🏛️ Terrestrial</option>
-                    <option value="maritime">⚓ Maritime</option>
-                </select>
+    <!-- Main Container -->
+    <div id="main-container">
 
-                <!-- Terrestrial Configuration -->
-                <div id="terrestrial-config" class="config-group">
-                    <label>Town Hall Level:</label>
-                    <input type="number" id="townHallLevel" class="input-game" value="25" min="1" max="66">
-
-                    <label>Wall Level:</label>
-                    <input type="number" id="wallLevel" class="input-game" value="0" min="0" max="48">
-                </div>
-
-                <!-- Maritime Configuration -->
-                <div id="maritime-config" class="config-group" style="display: none;">
-                    <label>Port Level:</label>
-                    <input type="number" id="portLevel" class="input-game" value="20" min="1" max="66">
-                </div>
-            </div>
-
-            <!-- Attacker Configuration -->
-            <div class="card-game">
-                <h2>⚔️ ATTACKER</h2>
-                <div class="config-row">
-                    <label>Hephaestus Level:</label>
-                    <select id="attackerHephaestus" class="input-game">
-                        <option value="0">Level 0</option>
-                        <option value="1">Level 1</option>
-                        <option value="2">Level 2</option>
-                        <option value="3">Level 3</option>
-                        <option value="4">Level 4</option>
-                        <option value="5">Level 5</option>
-                    </select>
-                </div>
-
-                <div id="attackerUnits" class="units-list"></div>
-
-                <button class="btn-game" id="addAttackerUnitBtn">➕ Add Unit</button>
-            </div>
-
-            <!-- Defender Configuration -->
-            <div class="card-game">
-                <h2>🛡️ DEFENDER</h2>
-                <div class="config-row">
-                    <label>Hephaestus Level:</label>
-                    <select id="defenderHephaestus" class="input-game">
-                        <option value="0">Level 0</option>
-                        <option value="1">Level 1</option>
-                        <option value="2">Level 2</option>
-                        <option value="3">Level 3</option>
-                        <option value="4">Level 4</option>
-                        <option value="5">Level 5</option>
-                    </select>
-                </div>
-
-                <div id="defenderUnits" class="units-list"></div>
-
-                <button class="btn-game" id="addDefenderUnitBtn">➕ Add Unit</button>
-            </div>
-
-            <div class="actions">
-                <button class="btn-game btn-primary" onclick="app.runSimulation()">▶️ START FULL BATTLE</button>
-                <button class="btn-game btn-primary step-start-button" onclick="app.startStepMode()">🎯 START STEP
-                    MODE</button>
-            </div>
-
-            <div class="actions">
-                <button class="btn-game" onclick="app.saveConfig()">💾 Save Setup</button>
-                <button class="btn-game" onclick="app.loadConfig()">📂 Load</button>
-            </div>
-        </div>
-
-        <!-- Step Mode Controls (OUTSIDE config-screen so they stay visible) -->
-        <div class="step-controls" style="display: none;">
-            <div class="round-status">
-                <span>Round: <strong id="current-round">0</strong> / 60</span>
-                <span class="status-badge" id="battle-status">Not Started</span>
-            </div>
-            <div class="button-group">
-                <button class="btn-game btn-primary next-round-button" disabled>▶️ Next Round</button>
-                <button class="btn-game btn-danger reset-button" disabled>🔄 Reset Battle</button>
-            </div>
-
-            <!-- Live Battle Status -->
-            <div class="card-game live-status">
-                <h3>⚔️ Battle Status</h3>
-                <div class="stats-grid">
-                    <div class="stat-box attacker-box">
-                        <h4>⚔️ ATTACKER</h4>
-                        <p>Alive: <strong id="live-attacker-alive">0</strong></p>
-                        <p>Casualties: <strong id="live-attacker-casualties">0</strong></p>
-                        <p>Damage Dealt: <strong id="live-attacker-damage">0</strong></p>
+        <!-- Main Header -->
+        <div id="main-header">
+            <div class="header-content">
+                <div class="header-title">Simulador de batallas de ikariam</div>
+                <div class="battle-type-group">
+                    <div class="battle-type-btn active" id="btn-terrestrial" onclick="app.setBattleType('terrestrial')">
+                        <div class="btn-inner">Batalla terrestre</div>
                     </div>
-                    <div class="stat-box defender-box">
-                        <h4>🛡️ DEFENDER</h4>
-                        <p>Alive: <strong id="live-defender-alive">0</strong></p>
-                        <p>Casualties: <strong id="live-defender-casualties">0</strong></p>
-                        <p>Damage Dealt: <strong id="live-defender-damage">0</strong></p>
+                    <div class="battle-type-btn" id="btn-maritime" onclick="app.setBattleType('maritime')">
+                        <div class="btn-inner">Batalla naval</div>
                     </div>
-                </div>
-            </div>
-
-            <!-- Battlefield Matrix Visualization -->
-            <div id="battlefield-matrix-container"></div>
-
-            <!-- Unit Summary Table -->
-            <div id="unit-summary-container" class="unit-summary" style="display: none;">
-                <h3>📊 Unit Summary</h3>
-                <div id="unit-summary-table"></div>
-            </div>
-        </div>
-
-        <!-- Add Unit Modal -->
-        <div id="addUnitModal" class="modal hidden">
-            <div class="modal-content card-game">
-                <h2>Add Unit</h2>
-
-                <div class="config-row">
-                    <label>Unit Name:</label>
-                    <select id="modalUnitName" class="input-game">
-                        <option value="hoplita">Hoplita</option>
-                        <option value="espadachin">Espadachín</option>
-                        <option value="lancero">Lancero</option>
-                        <option value="arquero">Arquero</option>
-                        <option value="hondero">Hondero</option>
-                        <option value="fusilero">Fusilero</option>
-                        <option value="catapulta">Catapulta</option>
-                        <option value="mortero">Mortero</option>
-                        <option value="ariete">Ariete</option>
-                        <option value="gigante-vapor">Gigante a Vapor</option>
-                        <option value="girocoptero">Girocóptero</option>
-                        <option value="bombardero">Bombardero</option>
-                        <option value="cocinero">Cocinero</option>
-                        <option value="medico">Médico</option>
-                    </select>
-                </div>
-
-                <div class="config-row">
-                    <label>Quantity:</label>
-                    <input type="number" id="modalQuantity" class="input-game" value="100" min="1" max="9999">
-                </div>
-
-                <div class="config-row">
-                    <label>Upgrade Level:</label>
-                    <select id="modalUpgradeLevel" class="input-game">
-                        <option value="0">Level 0</option>
-                        <option value="1">Level 1</option>
-                        <option value="2" selected>Level 2</option>
-                        <option value="3">Level 3</option>
-                    </select>
-                </div>
-
-                <div class="actions">
-                    <button class="btn-game btn-primary" onclick="app.confirmAddUnit()">Add</button>
-                    <button class="btn-game" onclick="app.closeModal()">Cancel</button>
                 </div>
             </div>
         </div>
 
-        <!-- Battle Report -->
-        <div id="report-screen" class="hidden">
-            <div class="card-game">
-                <h1 id="reportTitle">BATTLE REPORT</h1>
-
-                <div id="winnerBanner" class="winner-banner"></div>
-
-                <div class="stats-grid">
-                    <div class="stat-box">
-                        <h3>⚔️ ATTACKER</h3>
-                        <p id="attackerInitial"></p>
-                        <p id="attackerSurviving"></p>
-                        <p id="attackerCasualties"></p>
-                        <p id="attackerDamage"></p>
-                    </div>
-
-                    <div class="stat-box">
-                        <h3>🛡️ DEFENDER</h3>
-                        <p id="defenderInitial"></p>
-                        <p id="defenderSurviving"></p>
-                        <p id="defenderCasualties"></p>
-                        <p id="defenderDamage"></p>
-                    </div>
+        <!-- Global Config (Town Hall / Wall) -->
+        <div id="global-config">
+            <div class="config-item">
+                <label>Nivel intendencia</label>
+                <div class="input-wrapper">
+                    <input type="number" id="townHallLevel" value="25" min="1" max="66">
                 </div>
-
-                <h3>Detailed Unit Statistics</h3>
-                <table class="table-game">
-                    <thead>
-                        <tr>
-                            <th>Unit</th>
-                            <th>Initial</th>
-                            <th>Final</th>
-                            <th>Casualties</th>
-                            <th>Damage Dealt</th>
-                        </tr>
-                    </thead>
-                    <tbody id="unitStatsTable"></tbody>
-                </table>
-
-                <div class="actions">
-                    <button class="btn-game" onclick="app.exportJSON()">💾 Export JSON</button>
-                    <button class="btn-game" onclick="app.exportTXT()">💾 Export TXT</button>
-                    <button class="btn-game" onclick="app.newBattle()">🔄 New Battle</button>
+            </div>
+            <div class="config-item">
+                <label>Nivel muralla</label>
+                <div class="input-wrapper">
+                    <input type="number" id="wallLevel" value="0" min="0" max="48">
+                </div>
+            </div>
+            <!-- Maritime specific inputs (hidden by default) -->
+            <div class="config-item hidden" id="port-config">
+                <label>Nivel puerto</label>
+                <div class="input-wrapper">
+                    <input type="number" id="portLevel" value="20" min="1" max="66">
                 </div>
             </div>
         </div>
+
+        <!-- Attacker Section -->
+        <div class="unit-section" id="attacker-section">
+            <!-- Config Grid Container -->
+            <div class="unit-config-container">
+                <div class="section-header">
+                    <div class="header-left">
+                        <button class="btn-secondary" onclick="app.clearUnits('attacker')">
+                            <div class="btn-inner">Borrar todo</div>
+                        </button>
+                    </div>
+                    <div class="header-center">Tropas atacante</div>
+                    <div class="header-right">
+                        <button class="btn-secondary" onclick="app.applyUpgrades('attacker')">
+                            <div class="btn-inner">Aplicar todas mejoras</div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Hephaestus Level Selector -->
+                <div class="hephaestus-selector">
+                    <label for="attacker-hephaestus">Nivel Hefesto:</label>
+                    <select id="attacker-hephaestus" class="hephaestus-select">
+                        <option value="0">0</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                    </select>
+
+                    <label for="attacker-unit-type" style="margin-left: 20px;">Tipo unidades:</label>
+                    <select id="attacker-unit-type" class="hephaestus-select"
+                        onchange="app.filterUnitType('attacker', this.value)">
+                        <option value="normal">Normales</option>
+                        <option value="barbarian">Bárbaras</option>
+                    </select>
+                </div>
+
+                <!-- Unit Grid (Populated by JS or Static) -->
+                <div class="unit-grid" id="attacker-grid">
+                    <!-- Units will be generated here -->
+                </div>
+            </div>
+
+            <!-- Visualization Container -->
+            <div class="visualization-container">
+                <!-- Reserves -->
+                <div class="reserves-container">
+                    <div class="reserves-header">Reservas</div>
+                    <div class="reserves-list" id="attacker-reserves">
+                        <!-- Reserve slots -->
+                    </div>
+                </div>
+
+                <!-- Battlefield Matrix -->
+                <div class="matrix-container">
+                    <div class="battlefield-matrix" id="attacker-matrix">
+                        <!-- Matrix slots -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Defender Section -->
+        <div class="unit-section" id="defender-section">
+            <!-- Config Grid Container -->
+            <div class="unit-config-container">
+                <div class="section-header">
+                    <div class="header-left">
+                        <button class="btn-secondary" onclick="app.clearUnits('defender')">
+                            <div class="btn-inner">Borrar todo</div>
+                        </button>
+                    </div>
+                    <div class="header-center">Tropas defensor</div>
+                    <div class="header-right">
+                        <button class="btn-secondary" onclick="app.applyUpgrades('defender')">
+                            <div class="btn-inner">Aplicar todas mejoras</div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Hephaestus Level Selector -->
+                <div class="hephaestus-selector">
+                    <label for="defender-hephaestus">Nivel Hefesto:</label>
+                    <select id="defender-hephaestus" class="hephaestus-select">
+                        <option value="0">0</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                    </select>
+
+                    <label for="defender-unit-type" style="margin-left: 20px;">Tipo unidades:</label>
+                    <select id="defender-unit-type" class="hephaestus-select"
+                        onchange="app.filterUnitType('defender', this.value)">
+                        <option value="normal">Normales</option>
+                        <option value="barbarian">Bárbaras</option>
+                    </select>
+                </div>
+
+                <div class="unit-grid" id="defender-grid">
+                    <!-- Units will be generated here -->
+                </div>
+            </div>
+
+            <!-- Visualization Container -->
+            <div class="visualization-container">
+                <!-- Reserves -->
+                <div class="reserves-container">
+                    <div class="reserves-header">Reservas</div>
+                    <div class="reserves-list" id="defender-reserves">
+                        <!-- Reserve slots -->
+                    </div>
+                </div>
+
+                <!-- Battlefield Matrix -->
+                <div class="matrix-container">
+                    <div class="battlefield-matrix" id="defender-matrix">
+                        <!-- Matrix slots -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Bar -->
+        <div class="action-bar">
+            <button class="btn-action" onclick="app.saveConfig()">Guardar configuración</button>
+            <button class="btn-action" onclick="app.loadConfig()">Cargar configuración</button>
+            <button class="btn-primary-ikariam" onclick="app.runSimulation()">
+                <div class="btn-inner">Empezar batalla</div>
+            </button>
+        </div>
+
     </div>
 
-    <script src="scripts/battlefieldMatrix.js?v=dynamic_field_v26"></script>
+    <!-- Step Mode Controls (Hidden initially) -->
+    <div class="step-controls" style="display: none;">
+        <div class="round-status">
+            <span>Round: <strong id="current-round">0</strong> / 60</span>
+            <span class="status-badge" id="battle-status">Not Started</span>
+        </div>
+        <div class="button-group">
+            <button class="btn-game btn-primary next-round-button" disabled>▶️ Next Round</button>
+            <button class="btn-game reset-button" disabled>🔄 Reset</button>
+        </div>
+        <div id="step-battlefield" class="battlefield-container"></div>
+        <div id="step-log" class="battle-log"></div>
+    </div>
+
+    <script src="scripts/battlefieldMatrix.js"></script>
     <script src="dist/bundle_v36.js"></script>
 </body>
 

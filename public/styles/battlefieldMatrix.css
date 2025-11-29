@@ -1,10 +1,7 @@
 /* Battlefield Matrix Styles - Ikariam Theme */
 
 .battlefield-matrix {
-    margin: 20px 0;
     padding: 20px;
-    background: linear-gradient(to bottom, #fdf7dd, #f8e5b1);
-    border: 2px solid #c3a171;
     border-radius: 3px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }

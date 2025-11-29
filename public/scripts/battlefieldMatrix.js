@@ -155,27 +155,123 @@ class BattlefieldMatrix {
     }
 
     /**
-     * Render the battlefield matrix
+     * Render a preview of a single side's matrix
      */
-    render(containerId) {
+    renderPreview(containerId, lines, side, battleType, garrisonLimit) {
         const container = document.getElementById(containerId);
         if (!container) return;
 
-        container.innerHTML = `
-            <div class="battlefield-matrix">
-                <h3>⚔️ Attacker</h3>
-                <div class="grid attacker-grid" id="attacker-grid"></div>
+        // Extract data for this side only
+        const lineData = this.extractLineData(lines);
+        const isDefender = side === 'defender';
+
+        // Create 3x13 grid slots - initially empty
+        const gridSlots = {};
+        for (let row = 0; row < 3; row++) {
+            for (let col = 0; col < 13; col++) {
+                const key = `${row}-${col}`;
+                gridSlots[key] = { available: false, data: null };
+            }
+        }
+
+        // Mark available slots based on fieldConfig and populate with data
+        for (const [lineType, line] of Object.entries(lineData)) {
+            const config = this.fieldConfig[lineType];
+            if (!config) continue;
+
+            const numSlots = config.numSlots;
+
+            // For each slot index in this line
+            for (let slotIndex = 0; slotIndex < numSlots; slotIndex++) {
+                const pos = this.getSlotPosition(lineType, slotIndex);
+                if (!pos) continue;
+
+                // Mirror defender grid vertically
+                const actualRow = isDefender ? (2 - pos.row) : pos.row;
+                const key = `${actualRow}-${pos.col}`;
+
+                // Mark as available
+                gridSlots[key].available = true;
+
+                // Add slot data if it exists
+                if (line.slots && line.slots[slotIndex]) {
+                    gridSlots[key].data = line.slots[slotIndex];
+                }
+            }
+        }
+
+        // Apply classes to container
+        container.className = 'battlefield-matrix';
+        const battleTypeClass = battleType === 'Maritima' ? 'maritime' : 'terrestrial';
+        container.classList.add(`${side}-${battleTypeClass}`);
+
+        // Check if defender exceeds garrison limit
+        if (isDefender && garrisonLimit) {
+            let totalUnits = 0;
+            lines.forEach(line => {
+                line.slots.forEach(slot => {
+                    totalUnits += slot.units.length;
+                });
+                totalUnits += line.reserves.length;
+            });
+
+            if (totalUnits > garrisonLimit) {
+                container.classList.add('garrison-exceeded');
+            }
+        }
+
+        // Build HTML for slots only
+        let gridHTML = '';
+        for (let row = 0; row < 3; row++) {
+            for (let col = 0; col < 13; col++) {
+                const key = `${row}-${col}`;
+                const slot = gridSlots[key];
+
+                if (slot.available) {
+                    gridHTML += `<div class="matrix-slot" data-row="${row}" data-col="${col}"></div>`;
+                } else {
+                    // Empty placeholder to maintain grid structure
+                    gridHTML += `<div class="matrix-slot-unavailable" data-row="${row}" data-col="${col}"></div>`;
+                }
+            }
+        }
+        container.innerHTML = gridHTML;
+
+        // Now populate the available slots with unit data
+        for (let row = 0; row < 3; row++) {
+            for (let col = 0; col < 13; col++) {
+                const key = `${row}-${col}`;
+                const slot = gridSlots[key];
+
+                if (slot.available && slot.data && slot.data.units.length > 0) {
+                    const cell = container.querySelector(`.matrix-slot[data-row="${row}"][data-col="${col}"]`);
+                    if (cell) {
+                        this.renderPreviewSlot(cell, slot.data.units[0], slot.data.units.length);
+                    }
+                }
+            }
+        }
+    }
+
+    renderPreviewSlot(cell, unit, count) {
+        const unitName = unit.name;
+        // Calculate bars (mocked for preview as full health/ammo initially)
+        const hpPercent = 100;
+        const hasAmmo = unit.stats.ammunition !== null;
+        const ammoPercent = 100;
+
+        cell.innerHTML = `
+            <div class="slot-filled">
+                <img src="assets/units/${unitName}.png" class="slot-img" onerror="this.style.display='none'">
                 
-                <div class="battlefield-divider"></div>
+                <div class="slot-bar slot-bar-hp" style="height: ${hpPercent}%"></div>
+                ${hasAmmo ? `<div class="slot-bar slot-bar-ammo" style="height: ${ammoPercent}%"></div>` : ''}
                 
-                <h3>🛡️ Defender</h3>
-                <div class="grid defender-grid" id="defender-grid"></div>
+                <div class="slot-tag">${count}</div>
             </div>
         `;
-
-        this.renderGrid('attacker-grid', this.attackerData, false);
-        this.renderGrid('defender-grid', this.defenderData, true);
     }
+
 
     /**
      * Render a single grid (attacker or defender)
