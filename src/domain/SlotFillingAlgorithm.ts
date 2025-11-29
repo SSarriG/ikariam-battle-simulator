@@ -1,5 +1,6 @@
 import { BattleLine } from './BattleLine';
 import { Unit } from './Unit';
+import { SlotOrderService } from './SlotOrderService';
 
 export class SlotFillingAlgorithm {
     static fill(line: BattleLine, availableUnits: Unit[], handleReserves: boolean = true): Unit[] {
@@ -25,8 +26,13 @@ export class SlotFillingAlgorithm {
             });
         });
 
-        // Iterate over each slot
-        line.slots.forEach((slot, index) => {
+        // Get filling order based on line type
+        const slotIndices = SlotOrderService.getFillOrder(line.lineType, line.slots.length);
+
+        // Iterate over slots in the specific order
+        for (const index of slotIndices) {
+            const slot = line.slots[index];
+
             // Iterate over unit priorities for this line
             for (const unitName of line.unitPositionPriorities) {
                 const units = unitsMap.get(unitName);
@@ -67,7 +73,7 @@ export class SlotFillingAlgorithm {
                     break;
                 }
             }
-        });
+        }
 
         // Collect remaining units
         const remainingUnits: Unit[] = [];
