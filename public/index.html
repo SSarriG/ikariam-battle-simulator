@@ -133,46 +133,22 @@
         <!-- Add Unit Modal -->
         <div id="addUnitModal" class="modal hidden">
             <div class="modal-content card-game">
-                <h2>Add Unit</h2>
+                <h2>Añadir Unidades</h2>
 
-                <div class="config-row">
-                    <label>Unit Name:</label>
-                    <select id="modalUnitName" class="input-game">
-                        <option value="hoplita">Hoplita</option>
-                        <option value="espadachin">Espadachín</option>
-                        <option value="lancero">Lancero</option>
-                        <option value="arquero">Arquero</option>
-                        <option value="hondero">Hondero</option>
-                        <option value="fusilero">Fusilero</option>
-                        <option value="catapulta">Catapulta</option>
-                        <option value="mortero">Mortero</option>
-                        <option value="ariete">Ariete</option>
-                        <option value="gigante-vapor">Gigante a Vapor</option>
-                        <option value="girocoptero">Girocóptero</option>
-                        <option value="bombardero">Bombardero</option>
-                        <option value="cocinero">Cocinero</option>
-                        <option value="medico">Médico</option>
-                    </select>
+                <div class="unit-filter-group">
+                    <button class="btn-game btn-sm active" data-filter="normal"
+                        onclick="app.filterModalUnits('normal')">Normal</button>
+                    <button class="btn-game btn-sm" data-filter="barbarian"
+                        onclick="app.filterModalUnits('barbarian')">Bárbaras</button>
                 </div>
 
-                <div class="config-row">
-                    <label>Quantity:</label>
-                    <input type="number" id="modalQuantity" class="input-game" value="100" min="1" max="9999">
-                </div>
-
-                <div class="config-row">
-                    <label>Upgrade Level:</label>
-                    <select id="modalUpgradeLevel" class="input-game">
-                        <option value="0">Level 0</option>
-                        <option value="1">Level 1</option>
-                        <option value="2" selected>Level 2</option>
-                        <option value="3">Level 3</option>
-                    </select>
+                <div id="modalUnitList" class="unit-grid-container">
+                    <!-- Units will be injected here dynamically -->
                 </div>
 
                 <div class="actions">
-                    <button class="btn-game btn-primary" onclick="app.confirmAddUnit()">Add</button>
-                    <button class="btn-game" onclick="app.closeModal()">Cancel</button>
+                    <button id="modalConfirm" class="btn-game btn-primary">Añadir</button>
+                    <button id="modalCancel" class="btn-game">Cancelar</button>
                 </div>
             </div>
         </div>

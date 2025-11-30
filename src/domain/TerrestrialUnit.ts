@@ -8,8 +8,9 @@ export class TerrestrialUnit extends Unit {
         name: string,
         type: UnitType,
         stats: UnitStats,
-        upgradeLevel: number = 0
+        upgradeLevelAttack: number = 0,
+        upgradeLevelDefense: number = 0
     ) {
-        super(id, name, type, BattleType.Terrestrial, stats, upgradeLevel);
+        super(id, name, type, BattleType.Terrestrial, stats, upgradeLevelAttack, upgradeLevelDefense);
     }
 }

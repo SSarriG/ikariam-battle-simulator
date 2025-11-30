@@ -22,9 +22,10 @@ export class StepBattleSimulationUseCase {
             for (let i = 0; i < unitInput.quantity; i++) {
                 const unit = UnitFactory.createUnit(
                     unitInput.name,
-                    `attacker-${unitInput.name}-${i}`
+                    `attacker-${unitInput.name}-${i}`,
+                    unitInput.upgradeLevelAttack,
+                    unitInput.upgradeLevelDefense
                 );
-                unit.upgradeLevel = unitInput.upgradeLevel;
                 unit.hephaestusLevel = config.attacker.hephaestusLevel;
                 attackerUnits.push(unit);
             }
@@ -36,9 +37,10 @@ export class StepBattleSimulationUseCase {
             for (let i = 0; i < unitInput.quantity; i++) {
                 const unit = UnitFactory.createUnit(
                     unitInput.name,
-                    `defender-${unitInput.name}-${i}`
+                    `defender-${unitInput.name}-${i}`,
+                    unitInput.upgradeLevelAttack,
+                    unitInput.upgradeLevelDefense
                 );
-                unit.upgradeLevel = unitInput.upgradeLevel;
                 unit.hephaestusLevel = config.defender.hephaestusLevel;
                 defenderUnits.push(unit);
             }

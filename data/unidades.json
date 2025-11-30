@@ -379,6 +379,24 @@
       "tipo-unidad": "flancos"
     },
     {
+      "nombre-unidad": "espartano",
+      "generales": 1.7,
+      "puntos-golpe": 1200,
+      "armadura": 120,
+      "daño": 560,
+      "precision": 100,
+      "daño-mejora1": 560,
+      "daño-mejora2": 560,
+      "daño-mejora3": 560,
+      "armadura-mejora1": 120,
+      "armadura-mejora2": 120,
+      "armadura-mejora3": 120,
+      "tamaño": 1,
+      "municion": null,
+      "tipo-batalla": "terrestre",
+      "tipo-unidad": "primera-linea"
+    },
+    {
       "nombre-unidad": "lancero",
       "generales": 0.6,
       "puntos-golpe": 260,

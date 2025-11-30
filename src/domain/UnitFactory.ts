@@ -36,7 +36,7 @@ export class UnitFactory {
         }
     }
 
-    static createUnit(unitName: string, id: string, upgradeLevel: number = 0): Unit {
+    static createUnit(unitName: string, id: string, upgradeLevelAttack: number = 0, upgradeLevelDefense: number = 0): Unit {
         this.initializeMap();
         // Handle case where unitName might be a UnitType enum value (e.g. 'primera-linea') 
         // But usually it's the specific name 'hoplita'. 
@@ -78,9 +78,9 @@ export class UnitFactory {
         const type = this.mapUnitType(data['tipo-unidad']);
 
         if (data['tipo-batalla'] === 'terrestre') {
-            return new TerrestrialUnit(id, unitName, type, stats, upgradeLevel);
+            return new TerrestrialUnit(id, unitName, type, stats, upgradeLevelAttack, upgradeLevelDefense);
         } else {
-            return new MaritimeUnit(id, unitName, type, stats, upgradeLevel);
+            return new MaritimeUnit(id, unitName, type, stats, upgradeLevelAttack, upgradeLevelDefense);
         }
     }
 

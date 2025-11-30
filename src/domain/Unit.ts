@@ -5,7 +5,8 @@ import { HephaestusService } from './HephaestusService';
 export abstract class Unit {
     protected _currentHP: number;
     protected _currentAmmunition: number | null;
-    protected _upgradeLevel: number = 0;
+    protected _upgradeLevelAttack: number = 0;
+    protected _upgradeLevelDefense: number = 0;
     protected _hephaestusLevel: number = 0;
     protected _inReserve: boolean = false;
 
@@ -17,12 +18,14 @@ export abstract class Unit {
         public readonly type: UnitType,
         public readonly battleType: BattleType,
         public readonly stats: UnitStats,
-        upgradeLevel: number = 0
+        upgradeLevelAttack: number = 0,
+        upgradeLevelDefense: number = 0
     ) {
         this._currentHP = stats.baseHP;
         this._currentAmmunition = stats.ammunition;
-        this.upgradeLevel = upgradeLevel;
-        this.groupId = `${this.type}_upgrade${this.upgradeLevel}`;
+        this.upgradeLevelAttack = upgradeLevelAttack;
+        this.upgradeLevelDefense = upgradeLevelDefense;
+        this.groupId = `${this.type}_att${this.upgradeLevelAttack}_def${this.upgradeLevelDefense}`;
     }
 
     get currentHP(): number {
@@ -37,17 +40,26 @@ export abstract class Unit {
         return this._currentAmmunition;
     }
 
-    get upgradeLevel(): number {
-        return this._upgradeLevel;
+    get upgradeLevelAttack(): number {
+        return this._upgradeLevelAttack;
     }
 
-    set upgradeLevel(level: number) {
+    set upgradeLevelAttack(level: number) {
         if (level < 0 || level > 3) {
-            throw new Error('Upgrade level must be between 0 and 3');
+            throw new Error("Upgrade level must be between 0 and 3");
         }
-        this._upgradeLevel = level;
-        // Update groupId when upgrade level changes (though usually immutable after creation)
-        // this.groupId = `${this.type}_upgrade${this.upgradeLevel}`; 
+        this._upgradeLevelAttack = level;
+    }
+
+    get upgradeLevelDefense(): number {
+        return this._upgradeLevelDefense;
+    }
+
+    set upgradeLevelDefense(level: number) {
+        if (level < 0 || level > 3) {
+            throw new Error("Upgrade level must be between 0 and 3");
+        }
+        this._upgradeLevelDefense = level;
     }
 
     get hephaestusLevel(): number {
@@ -55,23 +67,19 @@ export abstract class Unit {
     }
 
     set hephaestusLevel(level: number) {
-        if (level < 0 || level > 5) {
-            throw new Error('Hephaestus level must be between 0 and 5');
-        }
         this._hephaestusLevel = level;
     }
 
-    getEffectiveStats(hephaestusLevel?: number): { hp: number; armor: number; damage: number; accuracy: number; size: number; ammunition: number | null } {
-        const level = hephaestusLevel !== undefined ? hephaestusLevel : this._hephaestusLevel;
-        const hephaestus = HephaestusService.getBonuses(level);
+    getEffectiveStats(): { hp: number; armor: number; damage: number; accuracy: number; size: number; ammunition: number | null } {
+        const hephaestus = HephaestusService.getBonuses(this._hephaestusLevel);
 
-        // Armor: base (from upgrade array at level 0) + upgrade + hephaestus
+        // Armor: base + upgrade + hephaestus
         // Note: stats.upgradeArmor[0] is base armor
-        const armor = this.stats.upgradeArmor[this._upgradeLevel] + hephaestus.armor;
+        const armor = this.stats.upgradeArmor[this._upgradeLevelDefense] + hephaestus.armor;
 
         // Damage: (base + upgrade) * (1 + hephaestus%)
         // Note: stats.upgradeDamage[0] is base damage
-        const damage = this.stats.upgradeDamage[this._upgradeLevel] * (1 + hephaestus.damagePercent);
+        const damage = this.stats.upgradeDamage[this._upgradeLevelAttack] * (1 + hephaestus.damagePercent);
 
         return {
             hp: this.stats.baseHP,

@@ -7,7 +7,7 @@ import { BattleType } from '../../src/domain/enums';
 
 console.log('Imports completed');
 
-const TERRESTRIAL_UNITS = [
+const TERRESTRIAL_UNITS_NORMAL = [
     { value: 'hoplita', label: 'Hoplita' },
     { value: 'espadachin', label: 'Espadachín' },
     { value: 'lancero', label: 'Lancero' },
@@ -20,9 +20,10 @@ const TERRESTRIAL_UNITS = [
     { value: 'gigante-vapor', label: 'Gigante a Vapor' },
     { value: 'girocoptero', label: 'Girocóptero' },
     { value: 'bombardero', label: 'Bombardero' },
-    { value: 'cocinero', label: 'Cocinero' },
-    { value: 'medico', label: 'Médico' },
-    // Unidades Bárbaras Terrestres
+    { value: 'espartano', label: 'Espartano' }
+];
+
+const TERRESTRIAL_UNITS_BARBARIAN = [
     { value: 'agitador-hachas-barbaro', label: 'Agitador de Hachas Bárbaro' },
     { value: 'aporreador-barbaro', label: 'Aporreador Bárbaro' },
     { value: 'unidad-guerra-barbara', label: 'Unidad de Guerra Bárbara' },
@@ -34,7 +35,7 @@ const TERRESTRIAL_UNITS = [
     { value: 'caza-barbaro', label: 'Caza Bárbaro' }
 ];
 
-const MARITIME_UNITS = [
+const MARITIME_UNITS_NORMAL = [
     { value: 'barco-espolon-comun', label: 'Barco Espolón' },
     { value: 'barco-lanzallamas', label: 'Barco Lanzallamas' },
     { value: 'barco-espolon-vapor', label: 'Barco Espolón a Vapor' },
@@ -44,8 +45,10 @@ const MARITIME_UNITS = [
     { value: 'barco-lanzamisiles', label: 'Barco Lanzamisiles' },
     { value: 'submarino', label: 'Submarino' },
     { value: 'lancha-palas', label: 'Lancha de Palas' },
-    { value: 'barco-portaglobos', label: 'Portaglobos' },
-    // Unidades Bárbaras Marítimas
+    { value: 'barco-portaglobos', label: 'Portaglobos' }
+];
+
+const MARITIME_UNITS_BARBARIAN = [
     { value: 'rompelanchas', label: 'Rompelanchas' },
     { value: 'rajavelas', label: 'Rajavelas' },
     { value: 'pirobarco', label: 'Pirobarco' },
@@ -90,6 +93,7 @@ class BattleSimulatorApp {
         this.addUnit = this.addUnit.bind(this);
         this.closeModal = this.closeModal.bind(this);
         this.confirmAddUnit = this.confirmAddUnit.bind(this);
+        this.filterModalUnits = this.filterModalUnits.bind(this);
 
         // Setup  event listeners
         this.setupEventListeners();
@@ -199,13 +203,7 @@ class BattleSimulatorApp {
     }
 
     updateUnitOptions() {
-        const battleType = document.getElementById('battleType').value;
-        const unitSelect = document.getElementById('modalUnitName');
-        const units = battleType === 'maritime' ? MARITIME_UNITS : TERRESTRIAL_UNITS;
-
-        unitSelect.innerHTML = units.map(unit =>
-            `<option value="${unit.value}">${unit.label}</option>`
-        ).join('');
+        // No longer needed with new modal
     }
 
     startStepMode() {
@@ -433,7 +431,56 @@ class BattleSimulatorApp {
 
     addUnit(side) {
         this.currentSide = side;
-        document.getElementById('addUnitModal').classList.remove('hidden');
+        const modal = document.getElementById('addUnitModal');
+        modal.classList.remove('hidden');
+
+        // Reset filter to normal by default
+        this.filterModalUnits('normal');
+    }
+
+    filterModalUnits(filterType) {
+        const listContainer = document.getElementById('modalUnitList');
+        const battleType = document.getElementById('battleType').value;
+
+        // Update buttons state
+        document.querySelectorAll('.unit-filter-group button').forEach(btn => {
+            if (btn.dataset.filter === filterType) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        // Determine units list
+        let units = [];
+        if (battleType === 'terrestrial') {
+            units = filterType === 'normal' ? TERRESTRIAL_UNITS_NORMAL : TERRESTRIAL_UNITS_BARBARIAN;
+        } else {
+            units = filterType === 'normal' ? MARITIME_UNITS_NORMAL : MARITIME_UNITS_BARBARIAN;
+        }
+
+        // Render unit grid
+        listContainer.innerHTML = units.map(unit => `
+            <div class="unit-selection-card">
+                <img src="assets/units/${unit.value}.png" 
+                     alt="${unit.label}" 
+                     onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2232%22 height=%2232%22><rect width=%2232%22 height=%2232%22 fill=%22%23eccf8e%22/><text x=%2216%22 y=%2220%22 text-anchor=%22middle%22 font-size=%2224%22>?</text></svg>'">
+                <label>${unit.label}</label>
+                <div class="inputs">
+                    <input type="number" class="qty-input" data-unit="${unit.value}" placeholder="Cant." min="0">
+                    <div class="upgrade-inputs">
+                        <div class="upgrade-wrapper attack" title="Nivel de Ataque">
+                            <span class="upgrade-icon">⚔️</span>
+                            <input type="number" class="upgrade-att-input" data-unit-upgrade-att="${unit.value}" min="0" max="3" value="3">
+                        </div>
+                        <div class="upgrade-wrapper defense" title="Nivel de Defensa">
+                            <span class="upgrade-icon">🛡️</span>
+                            <input type="number" class="upgrade-def-input" data-unit-upgrade-def="${unit.value}" min="0" max="3" value="3">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
     }
 
     closeModal() {
@@ -442,26 +489,41 @@ class BattleSimulatorApp {
     }
 
     confirmAddUnit() {
-        const unitName = document.getElementById('modalUnitName').value;
-        const quantity = parseInt(document.getElementById('modalQuantity').value);
-        const upgradeLevel = parseInt(document.getElementById('modalUpgradeLevel').value);
+        const qtyInputs = document.querySelectorAll('.qty-input');
+        let addedCount = 0;
 
-        if (isNaN(quantity) || quantity <= 0) {
-            alert('Invalid quantity');
-            return;
-        }
+        qtyInputs.forEach(input => {
+            const quantity = parseInt(input.value);
+            if (!isNaN(quantity) && quantity > 0) {
+                const unitName = input.dataset.unit;
+                const upgradeAttInput = document.querySelector(`input[data-unit-upgrade-att="${unitName}"]`);
+                const upgradeDefInput = document.querySelector(`input[data-unit-upgrade-def="${unitName}"]`);
 
-        const unit = { name: unitName, quantity, upgradeLevel };
+                const upgradeLevelAttack = parseInt(upgradeAttInput.value) || 0;
+                const upgradeLevelDefense = parseInt(upgradeDefInput.value) || 0;
 
-        if (this.currentSide === 'attacker') {
-            this.attackerUnits.push(unit);
-            this.renderUnits('attacker');
+                const unit = {
+                    name: unitName,
+                    quantity,
+                    upgradeLevelAttack,
+                    upgradeLevelDefense
+                };
+
+                if (this.currentSide === 'attacker') {
+                    this.attackerUnits.push(unit);
+                } else {
+                    this.defenderUnits.push(unit);
+                }
+                addedCount++;
+            }
+        });
+
+        if (addedCount > 0) {
+            this.renderUnits(this.currentSide);
+            this.closeModal();
         } else {
-            this.defenderUnits.push(unit);
-            this.renderUnits('defender');
+            alert('Por favor, añade al menos una unidad.');
         }
-
-        this.closeModal();
     }
 
     removeUnit(side, index) {
@@ -486,7 +548,7 @@ class BattleSimulatorApp {
                      onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2232%22 height=%2232%22><rect width=%2232%22 height=%2232%22 fill=%22%23eccf8e%22/><text x=%2216%22 y=%2220%22 text-anchor=%22middle%22 font-size=%2224%22>?</text></svg>'">
                 <span class="unit-name">${unit.name}</span>
                 <span class="unit-count">x ${unit.quantity}</span>
-                <span class="unit-count">(Upgrade ${unit.upgradeLevel})</span>
+                <span class="unit-count">(Att: ${unit.upgradeLevelAttack}, Def: ${unit.upgradeLevelDefense})</span>
                 <button class="btn-game btn-sm" onclick="app.removeUnit('${side}', ${index})">🗑️</button>
             </div>
         `).join('');

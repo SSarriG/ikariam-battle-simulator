@@ -8,8 +8,9 @@ export class MaritimeUnit extends Unit {
         name: string,
         type: UnitType,
         stats: UnitStats,
-        upgradeLevel: number = 0
+        upgradeLevelAttack: number = 0,
+        upgradeLevelDefense: number = 0
     ) {
-        super(id, name, type, BattleType.Maritime, stats, upgradeLevel);
+        super(id, name, type, BattleType.Maritime, stats, upgradeLevelAttack, upgradeLevelDefense);
     }
 }

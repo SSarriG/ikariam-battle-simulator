@@ -3,7 +3,8 @@ import { BattleType } from '../domain/enums';
 export interface UnitInput {
     name: string;
     quantity: number;
-    upgradeLevel: number;
+    upgradeLevelAttack: number;
+    upgradeLevelDefense: number;
 }
 
 export interface SideConfiguration {
