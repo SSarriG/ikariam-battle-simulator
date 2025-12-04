@@ -2,9 +2,9 @@
 
 /* Buttons */
 .btn-game {
-    background: var(--color-primary);
-    border: 3px solid var(--border-decorative);
-    border-radius: 3px;
+    background: linear-gradient(180deg, #F8E7B3 0%, #EACD8B 100%);
+    box-shadow: 0.5px 0.5px 0 0 rgba(253, 243, 208, 0.50) inset, 0 0 0 0.5px #604B30 inset;
+    border-radius: 1px;
     padding: 6px 12px;
     font-family: var(--font-header);
     font-weight: 700;
@@ -47,16 +47,6 @@
 .input-game:focus {
     outline: none;
     box-shadow: 0 0 0 2px rgba(195, 161, 113, 0.5);
-}
-
-/* Cards */
-.card-game {
-    background: var(--card-bg);
-    border: 2px solid var(--border);
-    border-radius: 3px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    padding: 12px;
-    margin-bottom: 12px;
 }
 
 .card-game h2 {
@@ -106,6 +96,8 @@
     gap: 8px;
     padding: 8px;
     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    border: 1px solid #B49F7B;
+
 }
 
 .unit-card:hover {
@@ -246,14 +238,17 @@
     font-size: var(--text-xl);
     color: var(--fg-primary);
     margin: 0 0 1rem 0;
-    padding-bottom: 0.5rem;
+    padding: 0.5rem;
     border-bottom: 2px solid var(--border);
+    width: 100%;
+    text-align: center;
 }
 
 .stats-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1rem;
+    width: 100%;
 }
 
 .stat-box {
@@ -301,8 +296,7 @@
     border: 1px solid #d4af37;
     /* Gold border */
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 0 60px rgba(212, 175, 55, 0.1);
-    border-radius: 8px;
-    padding: 20px;
+    padding: 1px;
 }
 
 .modal-content h2 {
@@ -312,8 +306,10 @@
     text-transform: uppercase;
     letter-spacing: 1px;
     border-bottom: 2px solid #e0e0e0;
-    padding-bottom: 15px;
+    padding: 6px 0px;
     margin-bottom: 20px;
+    border: 1px solid #B49F7B;
+    background: linear-gradient(180deg, #E0B57D 0%, #D9A967 100%);
 }
 
 /* Filter Group */
@@ -322,52 +318,105 @@
     gap: 0;
     margin-bottom: 25px;
     justify-content: center;
-    background: #e0e0e0;
-    border-radius: 20px;
-    padding: 4px;
+    /* background: #e0e0e0; */
+    /* border-radius: 1px; */
+    padding: 1px;
     width: fit-content;
     margin-left: auto;
     margin-right: auto;
+    border: 1px solid #B49F7B;
 }
 
 .unit-filter-group button {
     background: transparent;
     border: none;
     padding: 8px 24px;
-    border-radius: 16px;
-    color: #666;
     font-weight: 600;
     transition: all 0.3s ease;
     box-shadow: none;
 }
 
 .unit-filter-group button.active {
-    background: #fff;
-    color: #d4af37;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    background: linear-gradient(180deg, #E0B57D 0%, #D9A967 100%);
+    border: 1px solid #B49F7B;
 }
 
 /* Unit Grid */
 .unit-grid-container {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    /* Reduced from 180px */
     gap: 10px;
-    /* Reduced gap */
     max-height: 65vh;
     overflow-y: auto;
     padding: 10px;
-    border: 1px solid #e0e0e0;
-    background: #f5f5f5;
-    border-radius: 8px;
+    border: 1px solid #B49F7B;
+    background: #F8EEBD;
+    /* border-radius: 8px; */
     box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.battle-config {
+    display: flex;
+    padding: 1px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+    border: 2px solid #B49F7B;
+}
+
+.card-game {
+    display: flex;
+    padding: 1px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    border: 2px solid #B49F7B;
+    background: #F8EEBD;
+    width: 100%;
+}
+
+.card-game-header {
+    display: flex;
+    padding: 4px;
+    justify-content: space-between;
+    align-items: center;
+    align-self: stretch;
+    border: 1px solid #B49F7B;
+    background: linear-gradient(180deg, #E0B57D 0%, #D9A967 100%);
+}
+
+.card-game-container {
+    display: flex;
+    padding: 20px 6px;
+    justify-content: center;
+    align-items: flex-start;
+    align-content: flex-start;
+    gap: 16px 20px;
+    align-self: stretch;
+    flex-wrap: wrap;
+    border: 1px solid #B49F7B;
+    flex-direction: column;
+}
+
+.controls-container {
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+}
+
+.units-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 8px;
+    margin: 12px 0;
+    width: 100%;
 }
 
 /* --- THE PREMIUM CARD --- */
 .unit-selection-card {
-    background: #fff;
-    border: 1px solid #e0e0e0;
-    border-radius: 6px;
+    background: #F8EEBD;
+    border: 1px solid #B49F7B;
     padding: 8px;
     /* Reduced padding */
     display: flex;
@@ -436,23 +485,15 @@
 .unit-selection-card .qty-input {
     width: 100%;
     padding: 4px;
-    /* Reduced padding */
     font-size: 1em;
     font-weight: bold;
     text-align: center;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    background: #f9f9f9;
+    border: 1px solid #B49F7B;
+    /* border-radius: 4px; */
+    background: #FCF7E1;
     color: #333;
     transition: all 0.2s;
     height: 30px;
-    /* Fixed height */
-}
-
-.unit-selection-card .qty-input:focus {
-    background: #fff;
-    border-color: #d4af37;
-    outline: none;
 }
 
 .unit-selection-card .qty-input::placeholder {
@@ -475,10 +516,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    /* Center content */
-    background: #f0f0f0;
-    border-radius: 3px;
-    border: 1px solid #ddd;
+    background: #FCF7E1;
+    /* border-radius: 3px; */
+    border: 1px solid #B49F7B;
     padding: 1px 2px;
     transition: background 0.2s;
 }
@@ -517,10 +557,4 @@
     text-align: center;
     font-weight: 600;
     color: #555;
-}
-
-.unit-filter-group button.active {
-    background: var(--gradient-button);
-    border-color: var(--color-primary);
-    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2);
 }

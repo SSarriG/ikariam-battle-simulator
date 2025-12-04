@@ -471,11 +471,11 @@ class BattleSimulatorApp {
                     <div class="upgrade-inputs">
                         <div class="upgrade-wrapper attack" title="Nivel de Ataque">
                             <span class="upgrade-icon">⚔️</span>
-                            <input type="number" class="upgrade-att-input" data-unit-upgrade-att="${unit.value}" min="0" max="3" value="3">
+                            <input type="number" class="upgrade-att-input" data-unit-upgrade-att="${unit.value}" min="0" value="3">
                         </div>
                         <div class="upgrade-wrapper defense" title="Nivel de Defensa">
                             <span class="upgrade-icon">🛡️</span>
-                            <input type="number" class="upgrade-def-input" data-unit-upgrade-def="${unit.value}" min="0" max="3" value="3">
+                            <input type="number" class="upgrade-def-input" data-unit-upgrade-def="${unit.value}" min="0" value="3">
                         </div>
                     </div>
                 </div>
@@ -541,7 +541,7 @@ class BattleSimulatorApp {
         const units = side === 'attacker' ? this.attackerUnits : this.defenderUnits;
 
         container.innerHTML = units.map((unit, index) => `
-            <div class="card-game unit-card">
+            <div class="unit-card">
                 <img src="assets/units/${unit.name}.png" 
                      alt="${unit.name}" 
                      class="unit-icon"

@@ -45,8 +45,8 @@ export abstract class Unit {
     }
 
     set upgradeLevelAttack(level: number) {
-        if (level < 0 || level > 3) {
-            throw new Error("Upgrade level must be between 0 and 3");
+        if (level < 0) {
+            throw new Error("Upgrade level must be non-negative");
         }
         this._upgradeLevelAttack = level;
     }
@@ -56,8 +56,8 @@ export abstract class Unit {
     }
 
     set upgradeLevelDefense(level: number) {
-        if (level < 0 || level > 3) {
-            throw new Error("Upgrade level must be between 0 and 3");
+        if (level < 0) {
+            throw new Error("Upgrade level must be non-negative");
         }
         this._upgradeLevelDefense = level;
     }
@@ -73,13 +73,17 @@ export abstract class Unit {
     getEffectiveStats(): { hp: number; armor: number; damage: number; accuracy: number; size: number; ammunition: number | null } {
         const hephaestus = HephaestusService.getBonuses(this._hephaestusLevel);
 
-        // Armor: base + upgrade + hephaestus
-        // Note: stats.upgradeArmor[0] is base armor
-        const armor = this.stats.upgradeArmor[this._upgradeLevelDefense] + hephaestus.armor;
+        const upgradeIncrement = this.battleType === BattleType.Terrestrial ? 5 : 10;
 
-        // Damage: (base + upgrade) * (1 + hephaestus%)
-        // Note: stats.upgradeDamage[0] is base damage
-        const damage = this.stats.upgradeDamage[this._upgradeLevelAttack] * (1 + hephaestus.damagePercent);
+        // Armor: base + (level * increment) + hephaestus
+        const baseArmor = this.stats.baseArmor;
+        const armorUpgradeBonus = this._upgradeLevelDefense * upgradeIncrement;
+        const armor = baseArmor + armorUpgradeBonus + hephaestus.armor;
+
+        // Damage: (base + (level * increment)) * (1 + hephaestus%)
+        const baseDamage = this.stats.baseDamage;
+        const damageUpgradeBonus = this._upgradeLevelAttack * upgradeIncrement;
+        const damage = (baseDamage + damageUpgradeBonus) * (1 + hephaestus.damagePercent);
 
         return {
             hp: this.stats.baseHP,

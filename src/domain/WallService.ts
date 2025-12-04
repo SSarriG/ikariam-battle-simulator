@@ -68,9 +68,7 @@ export class WallService {
             // Or we treat it as size 1 but force it to fill the slot?
             // Let's assume size 1 for now, but we'll need special logic to place only 1 per slot.
             null, // Ammunition
-            0,    // Generals Cost
-            [stats.daño, stats.daño, stats.daño, stats.daño], // Upgrade Damage (No upgrades)
-            [stats.armadura, stats.armadura, stats.armadura, stats.armadura] // Upgrade Armor
+            0    // Generals Cost
         );
     }
 }

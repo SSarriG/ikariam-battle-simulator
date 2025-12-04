@@ -70,9 +70,7 @@ export class UnitFactory {
             data['precision'],
             data['tamaño'],
             data['municion'],
-            data['generales'],
-            [data['daño'], data['daño-mejora1'], data['daño-mejora2'], data['daño-mejora3']],
-            [data['armadura'], data['armadura-mejora1'], data['armadura-mejora2'], data['armadura-mejora3']]
+            data['generales']
         );
 
         const type = this.mapUnitType(data['tipo-unidad']);

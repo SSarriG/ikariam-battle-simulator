@@ -13,9 +13,9 @@ export class AttackSequencer {
             UnitType.AntiAir,
             UnitType.Bomber,
             UnitType.Artillery,
+            UnitType.Flank,
             UnitType.Ranged,
             UnitType.FirstLine,
-            UnitType.Flank,
         ];
     }
 }

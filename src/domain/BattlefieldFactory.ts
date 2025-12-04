@@ -144,9 +144,7 @@ export class BattlefieldFactory {
                 baseStats.accuracy,
                 slot.capacity, // Force size to fill slot
                 baseStats.ammunition,
-                baseStats.generalsCost,
-                baseStats.upgradeDamage,
-                baseStats.upgradeArmor
+                baseStats.generalsCost
             );
 
             const wall = new WallUnit(`wall-${i}`, wallStats, wallLevel);

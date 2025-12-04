@@ -11,7 +11,9 @@
 
 <body>
     <div class="container">
-        <h1>IKARIAM BATTLE SIMULATOR</h1>
+        <div class="header-container">
+            <h1>IKARIAM BATTLE SIMULATOR</h1>
+        </div>
 
         <!-- Battle Configuration -->
         <div id="config-screen">
@@ -38,44 +40,52 @@
                 </div>
             </div>
 
-            <!-- Attacker Configuration -->
-            <div class="card-game">
-                <h2>⚔️ ATTACKER</h2>
-                <div class="config-row">
-                    <label>Hephaestus Level:</label>
-                    <select id="attackerHephaestus" class="input-game">
-                        <option value="0">Level 0</option>
-                        <option value="1">Level 1</option>
-                        <option value="2">Level 2</option>
-                        <option value="3">Level 3</option>
-                        <option value="4">Level 4</option>
-                        <option value="5">Level 5</option>
-                    </select>
+            <div class="battle-config">
+                <!-- Attacker Configuration -->
+                <div class="card-game">
+                    <div class="card-game-header">Attacker</div>
+                    <div class="card-game-container">
+                        <div class="controls-container">
+                            <div class="config-row">
+                                <label>Hephaestus Level:</label>
+                                <select id="attackerHephaestus" class="input-game">
+                                    <option value="0">Level 0</option>
+                                    <option value="1">Level 1</option>
+                                    <option value="2">Level 2</option>
+                                    <option value="3">Level 3</option>
+                                    <option value="4">Level 4</option>
+                                    <option value="5">Level 5</option>
+                                </select>
+                            </div>
+                            <button class="btn-game" id="addAttackerUnitBtn">➕ Add Unit</button>
+                        </div>
+
+                        <div id="attackerUnits" class="units-list"></div>
+                    </div>
                 </div>
 
-                <div id="attackerUnits" class="units-list"></div>
+                <!-- Defender Configuration -->
+                <div class="card-game">
+                    <div class="card-game-header">Defender</div>
+                    <div class="card-game-container">
+                        <div class="controls-container">
+                            <div class="config-row">
+                                <label>Hephaestus Level:</label>
+                                <select id="defenderHephaestus" class="input-game">
+                                    <option value="0">Level 0</option>
+                                    <option value="1">Level 1</option>
+                                    <option value="2">Level 2</option>
+                                    <option value="3">Level 3</option>
+                                    <option value="4">Level 4</option>
+                                    <option value="5">Level 5</option>
+                                </select>
+                            </div>
+                            <button class="btn-game" id="addDefenderUnitBtn">➕ Add Unit</button>
+                        </div>
 
-                <button class="btn-game" id="addAttackerUnitBtn">➕ Add Unit</button>
-            </div>
-
-            <!-- Defender Configuration -->
-            <div class="card-game">
-                <h2>🛡️ DEFENDER</h2>
-                <div class="config-row">
-                    <label>Hephaestus Level:</label>
-                    <select id="defenderHephaestus" class="input-game">
-                        <option value="0">Level 0</option>
-                        <option value="1">Level 1</option>
-                        <option value="2">Level 2</option>
-                        <option value="3">Level 3</option>
-                        <option value="4">Level 4</option>
-                        <option value="5">Level 5</option>
-                    </select>
+                        <div id="defenderUnits" class="units-list"></div>
+                    </div>
                 </div>
-
-                <div id="defenderUnits" class="units-list"></div>
-
-                <button class="btn-game" id="addDefenderUnitBtn">➕ Add Unit</button>
             </div>
 
             <div class="actions">
@@ -132,7 +142,7 @@
 
         <!-- Add Unit Modal -->
         <div id="addUnitModal" class="modal hidden">
-            <div class="modal-content card-game">
+            <div class="modal-content">
                 <h2>Añadir Unidades</h2>
 
                 <div class="unit-filter-group">

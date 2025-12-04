@@ -31,7 +31,7 @@
         },
         {
             "nombre": "luchadores-distancia",
-            "orden-ataque": 4,
+            "orden-ataque": 5,
             "prioridad-ataque": [
                 "primera-linea",
                 "flancos",
@@ -54,7 +54,7 @@
         },
         {
             "nombre": "flancos",
-            "orden-ataque": 6,
+            "orden-ataque": 4,
             "prioridad-ataque": [
                 "flancos",
                 "luchadores-distancia",
