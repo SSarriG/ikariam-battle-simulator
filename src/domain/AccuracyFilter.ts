@@ -2,42 +2,29 @@ import { Unit } from './Unit';
 
 /**
  * AccuracyFilter
- * Filters attacking units based on their accuracy stat
- * Example: 12 Spearmen with 70% accuracy → only 8 attack effectively
+ * NOW PASS-THROUGH: All units attack regardless of accuracy.
+ * Accuracy is handled by damage reduction in MatrixCombatSystem.
  */
 export class AccuracyFilter {
     /**
-     * Get the effective attackers based on accuracy
-     * Formula: effective_count = floor(total × accuracy / 100)
+     * Get the effective attackers based on accuracy.
+     * 
+     * NOW PASS-THROUGH: Returns all units.
+     * Accuracy is handled by damage reduction in MatrixCombatSystem.
      */
-    static getEffectiveAttackers(units: Unit[]): Unit[] {
-        if (units.length === 0) {
-            return [];
-        }
-
-        // All units of the same type should have the same accuracy
-        const accuracy = units[0].stats.accuracy ?? 100;
-
-        if (accuracy >= 100) {
-            return units;
-        }
-
-        const effectiveCount = Math.floor(units.length * accuracy / 100);
-        return units.slice(0, effectiveCount);
+    static getEffectiveAttackers(attackers: Unit[]): Unit[] {
+        // Pass-through: All units attack
+        return attackers;
     }
 
     /**
-     * Check if a specific unit should attack based on its position and accuracy
-     * Used when processing units individually
+     * Determine if a specific unit should attack based on accuracy.
+     * 
+     * NOW PASS-THROUGH: Always returns true.
+     * Accuracy is handled by damage reduction in MatrixCombatSystem.
      */
-    static shouldUnitAttack(unit: Unit, unitIndex: number, totalUnits: number): boolean {
-        const accuracy = unit.stats.accuracy ?? 100;
-
-        if (accuracy >= 100) {
-            return true;
-        }
-
-        const effectiveCount = Math.floor(totalUnits * accuracy / 100);
-        return unitIndex < effectiveCount;
+    static shouldUnitAttack(attacker: Unit): boolean {
+        // Pass-through: All units attack
+        return true;
     }
 }

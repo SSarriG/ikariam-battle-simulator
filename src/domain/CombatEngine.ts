@@ -19,6 +19,7 @@ import { FieldSizeService } from './FieldSizeService';
 import { BattlefieldConfiguration } from './BattlefieldConfiguration';
 import { BattleSlot } from './BattleSlot';
 import { BattleLine } from './BattleLine';
+import { HealthEqualizer } from './HealthEqualizer';
 
 export class CombatEngine {
     private battlefield: Battlefield;
@@ -152,6 +153,11 @@ export class CombatEngine {
         // TODO: Re-implement SR with scaling factor or unit count threshold
         // this.battlefield.attackerLines.forEach(line => SlotRedistributionService.applySR(line));
         // this.battlefield.defenderLines.forEach(line => SlotRedistributionService.applySR(line));
+
+        // Health Equalization (End of Round)
+        console.log('[CombatEngine] Applying Health Equalization...');
+        this.battlefield.attackerLines.forEach(line => HealthEqualizer.equalize(line));
+        this.battlefield.defenderLines.forEach(line => HealthEqualizer.equalize(line));
 
         // Handle ammo depletion: Move empty units to reserves so they can be replaced
         // This happens at the end of the round to prepare for the next one
