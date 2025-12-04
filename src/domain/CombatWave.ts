@@ -6,13 +6,18 @@ export class CombatWave {
     constructor(
         public readonly units: Unit[]
     ) {
-        // Assume homogenous wave for now, or take average/first.
-        // In Ikariam, rows are usually same unit type.
-        if (units.length > 0) {
-            this.accuracy = units[0].getEffectiveStats().accuracy;
-        } else {
-            this.accuracy = 0;
-        }
+        // Calculate weighted average accuracy
+        // Units with more damage contribute more to the average
+        let totalWeightedAcc = 0;
+        let totalDamage = 0;
+
+        units.forEach(unit => {
+            const stats = unit.getEffectiveStats();
+            totalWeightedAcc += stats.accuracy * stats.damage;
+            totalDamage += stats.damage;
+        });
+
+        this.accuracy = totalDamage > 0 ? totalWeightedAcc / totalDamage : 100;
     }
 
     get totalDamage(): number {

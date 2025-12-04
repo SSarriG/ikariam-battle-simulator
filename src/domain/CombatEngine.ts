@@ -20,6 +20,7 @@ import { BattlefieldConfiguration } from './BattlefieldConfiguration';
 import { BattleSlot } from './BattleSlot';
 import { BattleLine } from './BattleLine';
 import { HealthEqualizer } from './HealthEqualizer';
+import { MatrixCombatSystem } from './MatrixCombatSystem';
 
 export class CombatEngine {
     private battlefield: Battlefield;
@@ -123,11 +124,10 @@ export class CombatEngine {
         const attackOrder = AttackSequencer.getAttackOrder();
 
         // SEQUENTIAL LINE COMBAT:
-        // Iterate through each line type in order (Anti-Air -> Bombers -> Artillery -> etc.)
-        // For each line, both sides attack, then damage is applied and casualties removed.
-        // This ensures that if Anti-Air kills Bombers, those Bombers cannot attack in the next phase.
+        for (let i = 0; i < attackOrder.length; i++) {
+            const lineType = attackOrder[i];
+            const isLastLine = (i === attackOrder.length - 1);
 
-        for (const lineType of attackOrder) {
             console.log(`\n=== Processing line: ${lineType} ===`);
 
             // Calculate attacker attacks for this line
@@ -136,9 +136,7 @@ export class CombatEngine {
             // Calculate defender attacks for this line
             this.processLineAttacks('defender', lineType, 'attacker');
 
-            // Apply damage immediately for this line exchange
-            console.log(`Applying queued damage for ${lineType}...`);
-            this.damageQueue.applyAll();
+            // MatrixCombatSystem applies damage immediately, no need for damage queue
 
             // Update statistics to reflect new HP/Alive states immediately
             this.updateStatistics();
@@ -146,6 +144,14 @@ export class CombatEngine {
             // Remove dead units immediately so they don't participate in subsequent phases
             console.log(`Removing dead units after ${lineType} exchange...`);
             this.battlefield.removeDeadUnits();
+
+            // Health Equalization AFTER each line exchange, EXCEPT the last one
+            // This way the final round result shows unequal damage from the last attacking line
+            if (!isLastLine) {
+                console.log('[CombatEngine] Applying Health Equalization...');
+                this.battlefield.attackerLines.forEach(line => HealthEqualizer.equalize(line));
+                this.battlefield.defenderLines.forEach(line => HealthEqualizer.equalize(line));
+            }
         }
 
         // Apply Slot-Redistribution (SR) after damage is applied but before units die
@@ -154,10 +160,8 @@ export class CombatEngine {
         // this.battlefield.attackerLines.forEach(line => SlotRedistributionService.applySR(line));
         // this.battlefield.defenderLines.forEach(line => SlotRedistributionService.applySR(line));
 
-        // Health Equalization (End of Round)
-        console.log('[CombatEngine] Applying Health Equalization...');
-        this.battlefield.attackerLines.forEach(line => HealthEqualizer.equalize(line));
-        this.battlefield.defenderLines.forEach(line => HealthEqualizer.equalize(line));
+        // NOTE: Health equalization at end of round is now SKIPPED
+        // It only happens after each line exchange except the last
 
         // Handle ammo depletion: Move empty units to reserves so they can be replaced
         // This happens at the end of the round to prepare for the next one
@@ -315,59 +319,28 @@ export class CombatEngine {
 
     private processLineAttacks(attackerSide: 'attacker' | 'defender', lineType: UnitType, enemySide: 'attacker' | 'defender'): void {
         const attackerLine = this.battlefield.getLine(attackerSide, lineType);
+        const defenderLine = this.battlefield.getLine(enemySide, lineType);
 
         if (!attackerLine.hasAliveUnits()) {
             return;
         }
 
-        const allAttackers = attackerLine.getAllAliveUnits();
-
-        // DIAGNOSTIC LOG
-        console.log(`[${attackerSide}] ${lineType}: ${allAttackers.length} total units before accuracy filter`);
-
-        // Apply accuracy filter
-        const effectiveAttackers = AccuracyFilter.getEffectiveAttackers(allAttackers);
-
-        // DIAGNOSTIC LOG
-        console.log(`[${attackerSide}] ${lineType}: ${effectiveAttackers.length} effective attackers after accuracy filter`);
-
-        // Create virtual combat state for sequential attack simulation
-        const virtualState = new VirtualCombatState();
-
-        let attackCount = 0;
-        // Process attacks sequentially (each attacker sees virtual state from previous attacks)
-        for (const attacker of effectiveAttackers) {
-            // Check if unit can attack (ammunition)
-            if (!AmmunitionManager.canAttack(attacker)) {
-                continue;
-            }
-
-            // Select target using virtual state
-            const target = TargetSelector.selectTarget(attacker, attackerLine, this.battlefield, enemySide, virtualState);
-
-            if (target) {
-                // Calculate damage
-                const damage = DamageCalculator.calculateDamage(attacker, target);
-
-                // Apply virtual damage (updates virtual HP and tracks virtual deaths)
-                virtualState.applyVirtualDamage(target, damage);
-
-                // Queue REAL damage for later application
-                this.damageQueue.addDamage(target, damage, attackerSide);
-                this.statistics.recordAttack(this.currentRound, attacker, target, damage, false);
-
-                attackCount++;
-            }
-
-            // Consume ammunition
-            AmmunitionManager.consumeAmmunition(attacker);
+        if (!defenderLine.hasAliveUnits()) {
+            return;
         }
 
-        // DIAGNOSTIC LOG
-        console.log(`[${attackerSide}] ${lineType}: ${attackCount} attacks executed`);
+        console.log(`[${attackerSide}] ${lineType} attacking ${lineType}...`);
 
-        // Virtual state is discarded after this line's attacks complete
-        // Real damage will be applied after BOTH sides attack
+        // Use Matrix Combat System
+        MatrixCombatSystem.processPhase(attackerLine, defenderLine, this.battlefield.battleType);
+
+        // Consume ammunition for all attackers
+        // NOTE: Should ammunition consumption happen in MatrixCombatSystem?
+        attackerLine.getAllAliveUnits().forEach(attacker => {
+            if (attacker.canAttack()) {
+                AmmunitionManager.consumeAmmunition(attacker);
+            }
+        });
     }
 
     private findUnitSlot(unit: Unit, side: 'attacker' | 'defender') {
