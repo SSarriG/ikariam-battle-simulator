@@ -6,7 +6,7 @@
       "puntos-golpe": 800,
       "armadura": 0,
       "daño": 960,
-      "precision": 100,
+      "precision": 20,
       "tamaño": 2,
       "municion": 2,
       "tipo-batalla": "terrestre",
