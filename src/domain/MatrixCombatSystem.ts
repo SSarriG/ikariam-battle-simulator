@@ -17,8 +17,8 @@ export class MatrixCombatSystem {
      * Calculate combat phase WITHOUT applying damage
      * Returns damage information to be applied later for simultaneous combat
      */
-    static calculatePhase(attackerLine: BattleLine, defenderLine: BattleLine, battleType: BattleType): Map<BattleSlot, { directDmg: number, splashDmg: number, numAttackers: number, avgDefenderHP: number, waves: CombatWave[] }> {
-        const damageMap = new Map<BattleSlot, { directDmg: number, splashDmg: number, numAttackers: number, avgDefenderHP: number, waves: CombatWave[] }>();
+    static calculatePhase(attackerLine: BattleLine, defenderLine: BattleLine, battleType: BattleType): Map<BattleSlot, { directDmg: number, splashDmg: number, numAttackers: number, avgDefenderHP: number, waves: CombatWave[], attackerLineType: string }> {
+        const damageMap = new Map<BattleSlot, { directDmg: number, splashDmg: number, numAttackers: number, avgDefenderHP: number, waves: CombatWave[], attackerLineType: string }>();
 
         // 1. Generate Attack Waves
         const waves = this.generateWaves(attackerLine);
@@ -36,7 +36,7 @@ export class MatrixCombatSystem {
         waveMapping.forEach((slotWaves, slot) => {
             const damage = this.calculateSlotDamage(slot, slotWaves, battleType);
             if (damage) {
-                damageMap.set(slot, { ...damage, waves: slotWaves }); // Include waves for sequential processing
+                damageMap.set(slot, { ...damage, waves: slotWaves, attackerLineType: attackerLine.lineType }); // Include waves and line type
             }
         });
 
@@ -47,7 +47,7 @@ export class MatrixCombatSystem {
      * Apply pre-calculated damage to all slots
      * This is called AFTER both sides have calculated their attacks for true simultaneity
      */
-    static applyDamage(damageMap: Map<BattleSlot, { directDmg: number, splashDmg: number, numAttackers: number, avgDefenderHP: number, waves: CombatWave[] }>, battleType: BattleType): void {
+    static applyDamage(damageMap: Map<BattleSlot, { directDmg: number, splashDmg: number, numAttackers: number, avgDefenderHP: number, waves: CombatWave[], attackerLineType: string }>, battleType: BattleType): void {
         damageMap.forEach((damageInfo, slot) => {
             this.applySlotDamage(slot, damageInfo, battleType);
         });
@@ -200,11 +200,11 @@ export class MatrixCombatSystem {
      */
     private static applySlotDamage(
         slot: BattleSlot,
-        damageInfo: { directDmg: number, splashDmg: number, numAttackers: number, avgDefenderHP: number, waves: CombatWave[] },
+        damageInfo: { directDmg: number, splashDmg: number, numAttackers: number, avgDefenderHP: number, waves: CombatWave[], attackerLineType: string },
         battleType: BattleType
     ): void {
         if (battleType === BattleType.Terrestrial) {
-            this.applyTerrestrialDamageSequential(slot, damageInfo.waves);
+            this.applyTerrestrialDamageSequential(slot, damageInfo.waves, damageInfo.attackerLineType);
         } else {
             this.applyMaritimeDamage(slot, damageInfo);
         }
@@ -214,10 +214,11 @@ export class MatrixCombatSystem {
      * Apply damage in TERRESTRIAL battles - SEQUENTIAL PROCESSING
      * Each attacker attacks one-by-one
      * 1-kill detection: if total damage >= avg defender HP, apply all damage without splash
+     * Counter-attack: if attacker is 'primera-linea' and defender has 'daño-2', defender strikes back
      */
-    private static applyTerrestrialDamageSequential(slot: BattleSlot, waves: CombatWave[]): void {
+    private static applyTerrestrialDamageSequential(slot: BattleSlot, waves: CombatWave[], attackerLineType: string): void {
         console.log(`  [TERRESTRIAL-SEQ] ========================================`);
-        console.log(`  [TERRESTRIAL-SEQ] Processing ${waves.length} waves`);
+        console.log(`  [TERRESTRIAL-SEQ] Processing ${waves.length} waves from ${attackerLineType}`);
         console.log(`  [TERRESTRIAL-SEQ] Initial defenders: ${slot.units.length} units`);
 
         let totalAttackerNum = 0;
@@ -256,9 +257,13 @@ export class MatrixCombatSystem {
                 // Detect 1-kill: total damage >= average defender HP
                 const isOneKill = netDamage >= avgDefenderHP;
 
+                // Variable to store the target of the direct attack (for counter-attack)
+                let directTarget: Unit | null = null;
+
                 if (isOneKill) {
                     // 1-KILL: Apply ALL damage to first defender, NO splash
                     const target = livingDefenders[0];
+                    directTarget = target;
                     const targetHPBefore = target.currentHP;
 
                     target.takeDamage(netDamage);
@@ -292,6 +297,7 @@ export class MatrixCombatSystem {
 
                     // 3. Apply DIRECT damage to first living defender
                     const target = stillAlive[0];
+                    directTarget = target;
                     const targetHPBefore = target.currentHP;
                     target.takeDamage(directDamage);
                     const targetHPAfter = target.currentHP;
@@ -303,6 +309,36 @@ export class MatrixCombatSystem {
                     console.log(`    ├─ Direct: ${directDamage.toFixed(0)}, Splash: ${splashPerUnit.toFixed(1)}/u × ${livingDefenders.length}`);
                     console.log(`    ├─ Target HP: ${targetHPBefore.toFixed(0)} → ${targetHPAfter.toFixed(0)} ${killed ? '☠️ KILLED' : ''}`);
                     console.log(`    └─ Defenders alive: ${remainingAlive}/${slot.units.length}`);
+                }
+
+                // COUNTER-ATTACK LOGIC
+                // If attacker is 'primera-linea' and defender has 'daño-2' (secondary damage)
+                if (attackerLineType === 'primera-linea' && directTarget) {
+                    const defenderStats = directTarget.getEffectiveStats();
+
+                    const damage2 = defenderStats.damage2;
+                    const precision2 = defenderStats.accuracy2;
+
+                    if (damage2 && damage2 > 0) {
+                        const attackerArmor = attacker.getEffectiveStats().armor;
+                        const counterNetDamage = Math.max(0, damage2 - attackerArmor);
+
+                        if (counterNetDamage > 0) {
+                            // Apply counter-attack damage to the ATTACKER
+                            // Logic: Since it's a 1-on-1 counter, the attacker takes ALL damage (Direct + Splash)
+                            // Just like when a single defender takes all damage from an attacker
+                            const damageToAttacker = counterNetDamage;
+
+                            const attackerHPBefore = attacker.currentHP;
+                            attacker.takeDamage(damageToAttacker);
+                            const attackerHPAfter = attacker.currentHP;
+                            const attackerKilled = !attacker.isAlive();
+
+                            console.log(`    ⚔️ COUNTER-ATTACK by ${directTarget.name}!`);
+                            console.log(`      └─ Dmg2: ${damage2}, Attacker Armor: ${attackerArmor}, Net: ${counterNetDamage}`);
+                            console.log(`      └─ Attacker HP: ${attackerHPBefore.toFixed(0)} → ${attackerHPAfter.toFixed(0)} ${attackerKilled ? '☠️ KILLED' : ''}`);
+                        }
+                    }
                 }
             });
 

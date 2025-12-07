@@ -22,6 +22,8 @@ interface UnitData {
     'generales': number;
     'tipo-batalla': string;
     'tipo-unidad': string;
+    'daño-2'?: number;
+    'precision-2'?: number;
 }
 
 export class UnitFactory {
@@ -70,7 +72,9 @@ export class UnitFactory {
             data['precision'],
             data['tamaño'],
             data['municion'],
-            data['generales']
+            data['generales'],
+            data['daño-2'] || 0,
+            data['precision-2'] || 0
         );
 
         const type = this.mapUnitType(data['tipo-unidad']);

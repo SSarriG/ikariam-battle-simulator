@@ -70,7 +70,7 @@ export abstract class Unit {
         this._hephaestusLevel = level;
     }
 
-    getEffectiveStats(): { hp: number; armor: number; damage: number; accuracy: number; size: number; ammunition: number | null } {
+    getEffectiveStats(): { hp: number; armor: number; damage: number; accuracy: number; size: number; ammunition: number | null; damage2?: number; accuracy2?: number } {
         const hephaestus = HephaestusService.getBonuses(this._hephaestusLevel);
 
         const upgradeIncrement = this.battleType === BattleType.Terrestrial ? 5 : 10;
@@ -91,13 +91,20 @@ export abstract class Unit {
             damage: Math.floor(damage), // Usually damage is integer in games
             accuracy: this.stats.accuracy,
             size: this.stats.size,
-            ammunition: this.stats.ammunition
+            ammunition: this.stats.ammunition,
+            damage2: this.stats.damage2,
+            accuracy2: this.stats.accuracy2
         };
     }
 
     takeDamage(amount: number): void {
-        if (this._inReserve) return;
+        if (this._inReserve) {
+            console.log(`[Unit ${this.name}] Ignored ${amount} dmg because in reserve`);
+            return;
+        }
+        const before = this._currentHP;
         this._currentHP -= amount;
+        // console.log(`[Unit ${this.name}] Took ${amount} dmg. HP: ${before} -> ${this._currentHP}`);
     }
 
     isAlive(): boolean {
