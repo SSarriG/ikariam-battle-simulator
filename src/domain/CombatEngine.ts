@@ -114,6 +114,11 @@ export class CombatEngine {
         this.battlefield.attackerLines.forEach(clearStats);
         this.battlefield.defenderLines.forEach(clearStats);
 
+        // R-R (Reserve-Redistribution): Apply at start of round
+        // Redistributes HP among all units of the same type across entire line (slots + reserves)
+        console.log('[CombatEngine] Applying R-R (Reserve-Redistribution)...');
+        this.applyReserveRedistribution();
+
         // 1. Refill slots from reserves (new units enter the battle)
         this.refillSlotsFromReserves();
 
@@ -130,13 +135,51 @@ export class CombatEngine {
 
             console.log(`\n=== Processing line: ${lineType} ===`);
 
-            // Calculate attacker attacks for this line
-            this.processLineAttacks('attacker', lineType, 'defender');
+            // TRUE SIMULTANEOUS COMBAT: 2-Phase System
+            // Phase 1: Calculate all attacks (both sides) WITHOUT applying damage
+            // Phase 2: Apply all damage simultaneously
 
-            // Calculate defender attacks for this line
-            this.processLineAttacks('defender', lineType, 'attacker');
+            const attackerLine = this.battlefield.getLine('attacker', lineType);
+            const defenderLine = this.battlefield.getLine('defender', lineType);
 
-            // MatrixCombatSystem applies damage immediately, no need for damage queue
+            // Phase 1: Calculate attacks (but don't apply damage yet)
+            let attackerDamageMap = new Map();
+            let defenderDamageMap = new Map();
+
+            // Attacker selects target based on attack priorities
+            if (attackerLine.hasAliveUnits()) {
+                const attackerTarget = this.selectTargetLine(attackerLine, 'defender');
+                if (attackerTarget) {
+                    console.log(`[attacker] ${lineType} calculating attack on ${attackerTarget.lineType}...`);
+                    attackerDamageMap = MatrixCombatSystem.calculatePhase(attackerLine, attackerTarget, this.battlefield.battleType);
+                }
+            }
+
+            // Defender selects target based on attack priorities
+            if (defenderLine.hasAliveUnits()) {
+                const defenderTarget = this.selectTargetLine(defenderLine, 'attacker');
+                if (defenderTarget) {
+                    console.log(`[defender] ${lineType} calculating counter-attack on ${defenderTarget.lineType}...`);
+                    defenderDamageMap = MatrixCombatSystem.calculatePhase(defenderLine, defenderTarget, this.battlefield.battleType);
+                }
+            }
+
+            // Phase 2: Apply all damage simultaneously
+            console.log(`Applying damage simultaneously...`);
+            MatrixCombatSystem.applyDamage(attackerDamageMap, this.battlefield.battleType);
+            MatrixCombatSystem.applyDamage(defenderDamageMap, this.battlefield.battleType);
+
+            // Consume ammunition for all units that attacked
+            attackerLine.getAllAliveUnits().forEach(attacker => {
+                if (attacker.canAttack()) {
+                    AmmunitionManager.consumeAmmunition(attacker);
+                }
+            });
+            defenderLine.getAllAliveUnits().forEach(defender => {
+                if (defender.canAttack()) {
+                    AmmunitionManager.consumeAmmunition(defender);
+                }
+            });
 
             // Update statistics to reflect new HP/Alive states immediately
             this.updateStatistics();
@@ -145,27 +188,41 @@ export class CombatEngine {
             console.log(`Removing dead units after ${lineType} exchange...`);
             this.battlefield.removeDeadUnits();
 
-            // Health Equalization AFTER each line exchange, EXCEPT the last one
+            // S-R (Slot-Redistribution): Apply AFTER each line exchange, EXCEPT the last one
+            // Redistributes HP within each slot independently
             // This way the final round result shows unequal damage from the last attacking line
             if (!isLastLine) {
-                console.log('[CombatEngine] Applying Health Equalization...');
+                console.log('[CombatEngine] Applying S-R (Slot-Redistribution)...');
                 this.battlefield.attackerLines.forEach(line => HealthEqualizer.equalize(line));
                 this.battlefield.defenderLines.forEach(line => HealthEqualizer.equalize(line));
             }
         }
 
-        // Apply Slot-Redistribution (SR) after damage is applied but before units die
-        // DISABLED: SR causes excessive damage dilution in mass battles (100+ units per slot)
-        // TODO: Re-implement SR with scaling factor or unit count threshold
-        // this.battlefield.attackerLines.forEach(line => SlotRedistributionService.applySR(line));
-        // this.battlefield.defenderLines.forEach(line => SlotRedistributionService.applySR(line));
+        // Update end-of-round totals
+        this.updateStatistics();
 
-        // NOTE: Health equalization at end of round is now SKIPPED
-        // It only happens after each line exchange except the last
+        console.log('=== Round Complete ===\n');
 
         // Handle ammo depletion: Move empty units to reserves so they can be replaced
         // This happens at the end of the round to prepare for the next one
         this.handleAmmoDepletion();
+    }
+
+    /**
+     * Select target line based on attack priorities from lineas.json
+     */
+    private selectTargetLine(attackerLine: BattleLine, enemySide: 'attacker' | 'defender'): BattleLine | null {
+        const enemyLines = this.battlefield.getLines(enemySide);
+
+        // Iterate through attack priorities to find first available target
+        for (const targetType of attackerLine.attackPriorities) {
+            const candidateLine = enemyLines.get(targetType);
+            if (candidateLine && candidateLine.hasAliveUnits()) {
+                return candidateLine;
+            }
+        }
+
+        return null;
     }
 
     private handleAmmoDepletion(): void {
@@ -315,32 +372,6 @@ export class CombatEngine {
                 }
             });
         }
-    }
-
-    private processLineAttacks(attackerSide: 'attacker' | 'defender', lineType: UnitType, enemySide: 'attacker' | 'defender'): void {
-        const attackerLine = this.battlefield.getLine(attackerSide, lineType);
-        const defenderLine = this.battlefield.getLine(enemySide, lineType);
-
-        if (!attackerLine.hasAliveUnits()) {
-            return;
-        }
-
-        if (!defenderLine.hasAliveUnits()) {
-            return;
-        }
-
-        console.log(`[${attackerSide}] ${lineType} attacking ${lineType}...`);
-
-        // Use Matrix Combat System
-        MatrixCombatSystem.processPhase(attackerLine, defenderLine, this.battlefield.battleType);
-
-        // Consume ammunition for all attackers
-        // NOTE: Should ammunition consumption happen in MatrixCombatSystem?
-        attackerLine.getAllAliveUnits().forEach(attacker => {
-            if (attacker.canAttack()) {
-                AmmunitionManager.consumeAmmunition(attacker);
-            }
-        });
     }
 
     private findUnitSlot(unit: Unit, side: 'attacker' | 'defender') {

@@ -1,26 +1,35 @@
 import { BattleLine } from './BattleLine';
 import { Unit } from './Unit';
 
+/**
+ * S-R (Slot-Redistribution) via HealthEqualizer
+ * Triggers: After each line exchange (except the last one)
+ * Mechanic: Redistributes HP within each slot independently
+ *           Groups units by type WITHIN each slot and equalizes HP
+ */
 export class HealthEqualizer {
     static equalize(line: BattleLine): void {
-        // Group ALL units (Active + Reserves) by type
-        const unitsByType = new Map<string, Unit[]>();
+        // Equalize HP within each slot independently
+        // This ensures damage redistribution only happens within the same slot
 
-        // 1. Collect from ALL Slots
+        // 1. Process each slot independently
         line.slots.forEach(slot => {
-            slot.units.forEach(unit => {
-                if (!unit.isAlive()) return;
-
-                const type = unit.name;
-                if (!unitsByType.has(type)) {
-                    unitsByType.set(type, []);
-                }
-                unitsByType.get(type)!.push(unit);
-            });
+            this.equalizeSlot(slot.units);
         });
 
-        // 2. Collect from Reserves
-        line.reserves.forEach(unit => {
+        // 2. Process reserves (all reserves together as one group)
+        this.equalizeSlot(line.reserves);
+    }
+
+    /**
+     * Equalize HP among units in a single slot
+     * Groups units by type and redistributes HP within each type group
+     */
+    private static equalizeSlot(units: Unit[]): void {
+        // Group units by type within this slot
+        const unitsByType = new Map<string, Unit[]>();
+
+        units.forEach(unit => {
             if (!unit.isAlive()) return;
 
             const type = unit.name;
@@ -30,15 +39,15 @@ export class HealthEqualizer {
             unitsByType.get(type)!.push(unit);
         });
 
-        // 3. Equalize each group
-        unitsByType.forEach(units => {
-            if (units.length <= 1) return;
+        // Equalize each type group within this slot
+        unitsByType.forEach(typeUnits => {
+            if (typeUnits.length <= 1) return;
 
-            const totalHP = units.reduce((sum, unit) => sum + unit.currentHP, 0);
-            const averageHP = Math.floor(totalHP / units.length);
-            const remainder = totalHP % units.length;
+            const totalHP = typeUnits.reduce((sum, unit) => sum + unit.currentHP, 0);
+            const averageHP = Math.floor(totalHP / typeUnits.length);
+            const remainder = totalHP % typeUnits.length;
 
-            units.forEach((unit, index) => {
+            typeUnits.forEach((unit, index) => {
                 unit.currentHP = averageHP + (index < remainder ? 1 : 0);
             });
         });
